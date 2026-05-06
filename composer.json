@@ -9,11 +9,11 @@
         "php": "^8.3",
         "fakerphp/faker": "^1.23",
         "laravel/framework": "^13.0",
-        "league/flysystem-aws-s3-v3": "^3.0",
         "laravel/horizon": "^5.46",
         "laravel/sanctum": "^4.3",
         "laravel/scout": "^11.1",
         "laravel/tinker": "^3.0",
+        "league/flysystem-aws-s3-v3": "3.0",
         "stripe/stripe-php": "13.0",
         "twilio/sdk": "8.3"
     },
