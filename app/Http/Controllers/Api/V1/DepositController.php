@@ -35,7 +35,8 @@ class DepositController extends BaseController
         }
 
         // Deposit amount: configurable per dealer, defaults to $500
-        $depositCents = (int) ($deal->dealer->settings['deposit_amount_cents'] ?? 50000);
+        $settings     = is_array($deal->dealer->settings) ? $deal->dealer->settings : [];
+        $depositCents = (int) ($settings['deposit_amount_cents'] ?? 50000);
 
         try {
             $result = $this->stripe->createDepositIntent($deal, $depositCents);
