@@ -81,8 +81,11 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::patch('deals/{deal}',     [DealController::class, 'update']);
         });
 
-        // Dealer staff / admin — manage all deals in their store
+        // Dealer admin/staff — manage all deals in their store
         Route::middleware('role:dealer_admin,dealer_staff')->group(function () {
+            // Branding — dealer admin can update their own dealership's branding
+            Route::patch('dealer/settings/branding', [AdminDealerController::class, 'updateBranding']);
+
             Route::get('dealer/deals',                               [DealController::class, 'index']);
             Route::get('dealer/deals/{deal}',                        [DealController::class, 'show']);
             Route::patch('dealer/deals/{deal}',                      [DealController::class, 'update']);

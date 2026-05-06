@@ -110,6 +110,25 @@ class DealerController extends BaseController
     }
 
     /**
+     * Update own dealer's branding — accessible by dealer_admin for their own dealership.
+     */
+    public function updateBranding(Request $request): JsonResponse
+    {
+        $dealer = app('current_dealer');
+
+        $data = $request->validate([
+            'name'          => ['sometimes', 'string', 'max:255'],
+            'slug'          => ['sometimes', 'string', 'max:63', 'regex:/^[a-z0-9-]+$/'],
+            'primary_color' => ['nullable', 'string', 'regex:/^#[0-9a-fA-F]{6}$/'],
+            'logo_url'      => ['nullable', 'url', 'max:2048'],
+        ]);
+
+        $dealer->update($data);
+
+        return $this->resourceResponse(new DealerResource($dealer->fresh()));
+    }
+
+    /**
      * Restore a soft-deleted dealer.
      */
     public function restore(int $dealer): JsonResponse
