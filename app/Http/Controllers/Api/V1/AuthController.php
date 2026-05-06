@@ -124,4 +124,20 @@ class AuthController extends BaseController
 
         return response()->json(['data' => new UserResource($user)], 201);
     }
+
+    /**
+     * List all staff members for the current dealer.
+     * Only accessible by dealer_admin role.
+     */
+    public function listStaff(Request $request): JsonResponse
+    {
+        $dealer = app('current_dealer');
+
+        $staff = \App\Models\User::where('dealer_id', $dealer->id)
+            ->whereIn('role', ['dealer_admin', 'dealer_staff'])
+            ->orderBy('name')
+            ->get();
+
+        return response()->json(['data' => UserResource::collection($staff)]);
+    }
 }

@@ -45,6 +45,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Staff invite — dealer admin only, tenant context required
     Route::middleware(['tenant', 'role:dealer_admin'])->group(function () {
+        Route::get('auth/staff',         [AuthController::class, 'listStaff']);
         Route::post('auth/invite-staff', [AuthController::class, 'inviteStaff']);
     });
 

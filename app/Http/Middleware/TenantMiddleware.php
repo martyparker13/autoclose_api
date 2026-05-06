@@ -103,10 +103,14 @@ class TenantMiddleware
     /**
      * Buyers updating or accessing sub-resources on an existing deal don't carry
      * a dealer context — resolve from the deal they're working on instead.
+     *
+     * Supports both route parameter {deal} and a `deal_id` query/body param
+     * (used when there is no deal route param, e.g. GET /fi-products?deal_id=…).
      */
     private function resolveFromDeal(Request $request): ?Dealer
     {
-        $dealId = $request->route('deal');
+        $dealId = $request->route('deal')
+            ?? $request->input('deal_id');
 
         if (! $dealId) {
             return null;
