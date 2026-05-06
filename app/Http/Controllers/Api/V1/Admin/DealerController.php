@@ -7,6 +7,7 @@ use App\Http\Resources\DealerResource;
 use App\Models\Dealer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 
 class DealerController extends BaseController
 {
@@ -107,6 +108,28 @@ class DealerController extends BaseController
         $model->delete();
 
         return $this->noContent();
+    }
+
+    /**
+     * Upload a logo image for the current dealer.
+     */
+    public function uploadLogo(Request $request): JsonResponse
+    {
+        $request->validate([
+            'file' => ['required', 'file', 'mimes:jpeg,jpg,png,webp,svg', 'max:5120'],
+        ]);
+
+        $dealer = app('current_dealer');
+
+        $path = $request->file('file')->store("dealers/{$dealer->id}/logo", 's3');
+
+        /** @var \Illuminate\Filesystem\FilesystemAdapter $disk */
+        $disk = Storage::disk('s3');
+        $url = $disk->url($path);
+
+        $dealer->update(['logo_url' => $url]);
+
+        return response()->json(['data' => ['logo_url' => $url]]);
     }
 
     /**

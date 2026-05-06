@@ -84,7 +84,8 @@ Route::middleware('auth:sanctum')->group(function () {
         // Dealer admin/staff — manage all deals in their store
         Route::middleware('role:dealer_admin,dealer_staff')->group(function () {
             // Branding — dealer admin can update their own dealership's branding
-            Route::patch('dealer/settings/branding', [AdminDealerController::class, 'updateBranding']);
+            Route::patch('dealer/settings/branding',    [AdminDealerController::class, 'updateBranding']);
+            Route::post('dealer/settings/logo',         [AdminDealerController::class, 'uploadLogo']);
 
             Route::get('dealer/deals',                               [DealController::class, 'index']);
             Route::get('dealer/deals/{deal}',                        [DealController::class, 'show']);
