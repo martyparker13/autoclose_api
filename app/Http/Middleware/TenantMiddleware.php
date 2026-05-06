@@ -25,7 +25,8 @@ class TenantMiddleware
         $dealer = $this->resolveFromSubdomain($request)
             ?? $this->resolveFromHeader($request)
             ?? $this->resolveFromUser($request)
-            ?? $this->resolveFromVehicle($request);
+            ?? $this->resolveFromVehicle($request)
+            ?? $this->resolveFromDeal($request);
 
         if (! $dealer) {
             return response()->json(['message' => 'Dealer not found.'], 404);
@@ -97,5 +98,22 @@ class TenantMiddleware
         $vehicle = \App\Models\Vehicle::select('dealer_id')->find((int) $vehicleId);
 
         return $vehicle ? Dealer::find($vehicle->dealer_id) : null;
+    }
+
+    /**
+     * Buyers updating or accessing sub-resources on an existing deal don't carry
+     * a dealer context — resolve from the deal they're working on instead.
+     */
+    private function resolveFromDeal(Request $request): ?Dealer
+    {
+        $dealId = $request->route('deal');
+
+        if (! $dealId) {
+            return null;
+        }
+
+        $deal = \App\Models\Deal::select('dealer_id')->find((int) $dealId);
+
+        return $deal ? Dealer::find($deal->dealer_id) : null;
     }
 }

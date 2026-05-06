@@ -71,13 +71,18 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
     // ── Deals ─────────────────────────────────────────────────────────────────
+
+    // Buyers — read own deals (no dealer context needed)
+    Route::middleware('role:buyer')->group(function () {
+        Route::get('deals',          [DealController::class, 'index']);
+        Route::get('deals/{deal}',   [DealController::class, 'show']);
+    });
+
     Route::middleware('tenant')->group(function () {
 
-        // Buyers — open a deal, view own deals, update terms
+        // Buyers — open a deal or update terms (tenant resolved via vehicle_id / deal_id)
         Route::middleware('role:buyer')->group(function () {
             Route::post('deals',             [DealController::class, 'store']);
-            Route::get('deals',              [DealController::class, 'index']);
-            Route::get('deals/{deal}',       [DealController::class, 'show']);
             Route::patch('deals/{deal}',     [DealController::class, 'update']);
         });
 
