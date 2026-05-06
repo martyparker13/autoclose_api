@@ -17,6 +17,13 @@ interface VehicleRepositoryInterface
     public function paginateForDealer(int $dealerId, array $filters = []): CursorPaginator;
 
     /**
+     * Paginate all available vehicles across all dealers (marketplace browse).
+     *
+     * @param  array<string, mixed> $filters
+     */
+    public function paginateAll(array $filters = []): CursorPaginator;
+
+    /**
      * Find a vehicle by ID scoped to a dealer.
      *
      * @throws \Illuminate\Database\Eloquent\ModelNotFoundException

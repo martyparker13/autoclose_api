@@ -31,6 +31,10 @@ Route::prefix('auth')->group(function () {
     Route::post('reset-password',  [AuthController::class, 'resetPassword']);
 });
 
+// ── Public inventory browsing (no auth required, no tenant required) ──────
+Route::get('vehicles',           [VehicleController::class, 'index']);
+Route::get('vehicles/{vehicle}', [VehicleController::class, 'show']);
+
 // ── Authenticated routes ──────────────────────────────────────────────────
 Route::middleware('auth:sanctum')->group(function () {
 
@@ -44,12 +48,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('auth/invite-staff', [AuthController::class, 'inviteStaff']);
     });
 
-    // ── Inventory (public browsing requires tenant, mutations require staff) ──
+    // ── Inventory mutations (dealer staff only, requires tenant) ─────────────
     Route::middleware('tenant')->group(function () {
-
-        // Buyers + dealer staff can browse
-        Route::get('vehicles',        [VehicleController::class, 'index']);
-        Route::get('vehicles/{vehicle}', [VehicleController::class, 'show']);
 
         // Dealer staff / admin only — mutations
         Route::middleware('role:dealer_admin,dealer_staff')->group(function () {

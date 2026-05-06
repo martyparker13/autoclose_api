@@ -6,6 +6,7 @@ use App\Http\Requests\Vehicle\ImportVehiclesRequest;
 use App\Http\Requests\Vehicle\StoreVehicleRequest;
 use App\Http\Requests\Vehicle\UpdateVehicleRequest;
 use App\Http\Resources\VehicleResource;
+use App\Models\Vehicle;
 use App\Repositories\VehicleRepositoryInterface;
 use App\Services\InventoryService;
 use Illuminate\Http\JsonResponse;
@@ -19,28 +20,35 @@ class VehicleController extends BaseController
     ) {}
 
     /**
-     * List vehicles for the current dealer with optional filters.
-     * When `q` query param is present, a full-text search is performed via Scout.
+     * List vehicles.
+     *
+     * - With dealer context (tenant middleware present): returns that dealer's vehicles.
+     * - Without dealer context (public marketplace browse): returns all available vehicles.
      */
     public function index(Request $request): JsonResponse
     {
-        $dealer = app('current_dealer');
+        $dealer = app()->bound('current_dealer') ? app('current_dealer') : null;
 
-        if ($request->filled('q')) {
-            $vehicles = $this->inventory->search($dealer, (string) $request->query('q'));
+        if ($dealer) {
+            if ($request->filled('q')) {
+                $vehicles = $this->inventory->search($dealer, (string) $request->query('q'));
 
-            return response()->json([
-                'data' => VehicleResource::collection($vehicles),
-                'meta' => ['next_cursor' => null, 'per_page' => count($vehicles)],
-            ]);
+                return response()->json([
+                    'data' => VehicleResource::collection($vehicles),
+                    'meta' => ['next_cursor' => null, 'per_page' => count($vehicles)],
+                ]);
+            }
+
+            $vehicles = $this->inventory->list($dealer, $request->query());
+        } else {
+            // Marketplace browse — no tenant context, show all available vehicles
+            $vehicles = $this->repo->paginateAll($request->query());
         }
-
-        $vehicles = $this->inventory->list($dealer, $request->query());
 
         return response()->json([
             'data' => VehicleResource::collection($vehicles),
             'meta' => [
-                'next_cursor' => $vehicles->nextCursor()?->encode(),
+                'next_cursor' => method_exists($vehicles, 'nextCursor') ? $vehicles->nextCursor()?->encode() : null,
                 'per_page'    => 20,
             ],
         ]);
@@ -48,13 +56,21 @@ class VehicleController extends BaseController
 
     /**
      * Show a single vehicle with media and features.
+     *
+     * - With dealer context: scoped to that dealer.
+     * - Without dealer context: any vehicle by ID.
      */
     public function show(int $vehicle): JsonResponse
     {
-        $dealer  = app('current_dealer');
-        $vehicle = $this->repo->findForDealer($vehicle, $dealer->id);
+        $dealer = app()->bound('current_dealer') ? app('current_dealer') : null;
 
-        return $this->resourceResponse(new VehicleResource($vehicle));
+        if ($dealer) {
+            $model = $this->repo->findForDealer($vehicle, $dealer->id);
+        } else {
+            $model = Vehicle::with(['media', 'features'])->findOrFail($vehicle);
+        }
+
+        return $this->resourceResponse(new VehicleResource($model));
     }
 
     /**

@@ -80,6 +80,71 @@ class VehicleRepository implements VehicleRepositoryInterface
     }
 
     /**
+     * Paginate all available vehicles across all dealers (marketplace browse).
+     *
+     * @param  array<string, mixed>  $filters
+     */
+    public function paginateAll(array $filters = []): CursorPaginator
+    {
+        $query = Vehicle::with(['media' => fn ($q) => $q->where('is_primary', true)])
+            ->withoutTrashed()
+            ->where('status', 'available');
+
+        if (! empty($filters['dealer_id'])) {
+            $query->where('dealer_id', (int) $filters['dealer_id']);
+        }
+
+        if (! empty($filters['condition'])) {
+            $query->where('condition', $filters['condition']);
+        }
+
+        if (! empty($filters['make'])) {
+            $query->where('make', $filters['make']);
+        }
+
+        if (! empty($filters['model'])) {
+            $query->where('model', $filters['model']);
+        }
+
+        if (! empty($filters['year_min'])) {
+            $query->where('year', '>=', $filters['year_min']);
+        }
+
+        if (! empty($filters['year_max'])) {
+            $query->where('year', '<=', $filters['year_max']);
+        }
+
+        if (! empty($filters['price_min'])) {
+            $query->where('price', '>=', (int) $filters['price_min'] * 100);
+        }
+
+        if (! empty($filters['price_max'])) {
+            $query->where('price', '<=', (int) $filters['price_max'] * 100);
+        }
+
+        if (! empty($filters['search'])) {
+            $term = $filters['search'];
+            $query->where(function ($q) use ($term) {
+                $q->where('make', 'like', "%{$term}%")
+                  ->orWhere('model', 'like', "%{$term}%")
+                  ->orWhere('trim', 'like', "%{$term}%")
+                  ->orWhere('vin', 'like', "%{$term}%")
+                  ->orWhere('stock_number', 'like', "%{$term}%");
+            });
+        }
+
+        $sort = $filters['sort'] ?? 'created_at';
+        $dir  = $filters['dir'] ?? 'desc';
+        $allowedSorts = ['price', 'year', 'mileage', 'created_at'];
+        if (! in_array($sort, $allowedSorts, true)) {
+            $sort = 'created_at';
+        }
+        $query->orderBy($sort, $dir === 'asc' ? 'asc' : 'desc');
+
+        return $query->cursorPaginate(20);
+    }
+
+    /**
      * Find a single vehicle scoped to a dealer.
      *
      * @throws \Illuminate\Database\Eloquent\ModelNotFoundException
