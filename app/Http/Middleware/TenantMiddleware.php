@@ -24,7 +24,8 @@ class TenantMiddleware
     {
         $dealer = $this->resolveFromSubdomain($request)
             ?? $this->resolveFromHeader($request)
-            ?? $this->resolveFromUser($request);
+            ?? $this->resolveFromUser($request)
+            ?? $this->resolveFromVehicle($request);
 
         if (! $dealer) {
             return response()->json(['message' => 'Dealer not found.'], 404);
@@ -79,5 +80,22 @@ class TenantMiddleware
         }
 
         return null;
+    }
+
+    /**
+     * Buyers starting a deal don't carry a dealer context — resolve from the
+     * vehicle they're purchasing instead.
+     */
+    private function resolveFromVehicle(Request $request): ?Dealer
+    {
+        $vehicleId = $request->input('vehicle_id');
+
+        if (! $vehicleId) {
+            return null;
+        }
+
+        $vehicle = \App\Models\Vehicle::select('dealer_id')->find((int) $vehicleId);
+
+        return $vehicle ? Dealer::find($vehicle->dealer_id) : null;
     }
 }
