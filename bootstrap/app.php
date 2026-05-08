@@ -14,8 +14,9 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([
-            'tenant' => \App\Http\Middleware\TenantMiddleware::class,
-            'role'   => \App\Http\Middleware\EnsureRole::class,
+            'tenant'      => \App\Http\Middleware\TenantMiddleware::class,
+            'role'        => \App\Http\Middleware\EnsureRole::class,
+            'auth.api_key' => \App\Http\Middleware\ApiKeyMiddleware::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

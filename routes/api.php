@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\CreditApplicationController;
 use App\Http\Controllers\Api\V1\DealController;
 use App\Http\Controllers\Api\V1\DealDocumentController;
+use App\Http\Controllers\Api\V1\DealerApiKeyController;
 use App\Http\Controllers\Api\V1\DeliveryAppointmentController;
 use App\Http\Controllers\Api\V1\DepositController;
 use App\Http\Controllers\Api\V1\DocuSignController;
@@ -15,6 +16,7 @@ use App\Http\Controllers\Api\V1\ReportingController;
 use App\Http\Controllers\Api\V1\VehicleController;
 use App\Http\Controllers\Api\V1\VehicleFeatureController;
 use App\Http\Controllers\Api\V1\VehicleMediaController;
+use App\Http\Controllers\Api\V1\VehicleSyncController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -188,4 +190,16 @@ Route::middleware(['auth:sanctum', 'role:super_admin'])->prefix('admin')->group(
     Route::patch('dealers/{dealer}',             [AdminDealerController::class, 'update']);
     Route::delete('dealers/{dealer}',            [AdminDealerController::class, 'destroy']);
     Route::post('dealers/{dealer}/restore',      [AdminDealerController::class, 'restore']);
+});
+
+// ── Dealer API key management (dealer admin, Sanctum auth) ────────────────
+Route::middleware(['auth:sanctum', 'tenant', 'role:dealer_admin'])->group(function () {
+    Route::get('dealer/api-keys',         [DealerApiKeyController::class, 'index']);
+    Route::post('dealer/api-keys',        [DealerApiKeyController::class, 'store']);
+    Route::delete('dealer/api-keys/{keyId}', [DealerApiKeyController::class, 'destroy']);
+});
+
+// ── Inventory sync via API key (no Sanctum — server-to-server) ───────────
+Route::middleware('auth.api_key')->group(function () {
+    Route::post('vehicles/sync', VehicleSyncController::class);
 });

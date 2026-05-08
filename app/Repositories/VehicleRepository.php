@@ -90,8 +90,28 @@ class VehicleRepository implements VehicleRepositoryInterface
             ->withoutTrashed()
             ->where('status', 'available');
 
+        // Embed /start lookup — resolve dealer by slug
+        if (! empty($filters['dealer'])) {
+            $dealer = \App\Models\Dealer::where('slug', $filters['dealer'])
+                ->orWhere('subdomain', $filters['dealer'])
+                ->first();
+            if ($dealer) {
+                $query->where('dealer_id', $dealer->id);
+            }
+        }
+
         if (! empty($filters['dealer_id'])) {
             $query->where('dealer_id', (int) $filters['dealer_id']);
+        }
+
+        // Exact VIN lookup (embed widget)
+        if (! empty($filters['vin'])) {
+            $query->where('vin', $filters['vin']);
+        }
+
+        // Exact stock number lookup (embed widget)
+        if (! empty($filters['stock'])) {
+            $query->where('stock_number', $filters['stock']);
         }
 
         if (! empty($filters['condition'])) {
