@@ -15,7 +15,7 @@ return new class extends Migration
             $table->unsignedInteger('term_months');
             $table->unsignedInteger('down_payment');       // cents
             $table->unsignedInteger('sale_price');          // cents
-            $table->json('fi_product_ids')->default('[]');  // array of FI product IDs included
+            $table->json('fi_product_ids');                 // array of FI product IDs included
             $table->decimal('apr', 5, 3);                   // e.g. 6.900
             $table->unsignedInteger('monthly_payment');     // cents
             $table->unsignedInteger('total_cost');          // cents (monthly_payment * term + down)
