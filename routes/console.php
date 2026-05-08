@@ -10,3 +10,6 @@ Artisan::command('inspire', function () {
 
 // Pull inventory from DealerTrack for all connected dealers every hour.
 Schedule::command('inventory:sync-dealertrack')->hourly();
+
+// Run workflow reminders/escalations for stale deals every 30 minutes.
+Schedule::command('deals:run-workflow-automation')->everyThirtyMinutes();

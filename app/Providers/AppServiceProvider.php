@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Events\DealStatusChanged;
+use App\Listeners\AutomateDealWorkflow;
 use App\Listeners\PushCreditApplication;
 use App\Listeners\PushEContract;
 use App\Listeners\SendDealStatusNotification;
@@ -52,6 +53,7 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(User::class, UserPolicy::class);
 
         Event::listen(DealStatusChanged::class, SendDealStatusNotification::class);
+        Event::listen(DealStatusChanged::class, AutomateDealWorkflow::class);
         Event::listen(DealStatusChanged::class, TriggerPostPurchaseJourney::class);
         Event::listen(DealStatusChanged::class, PushCreditApplication::class);
         Event::listen(DealStatusChanged::class, PushEContract::class);
