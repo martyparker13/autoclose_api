@@ -42,6 +42,7 @@ class Vehicle extends Model
         'status',
         'description',
         'carfax_url',
+        'vin_decoded_at',
     ];
 
     /** @var list<string> */
@@ -57,6 +58,7 @@ class Vehicle extends Model
         'year'           => 'integer',
         'doors'          => 'integer',
         'cylinders'      => 'integer',
+        'vin_decoded_at' => 'datetime',
     ];
 
     // ── Scopes ───────────────────────────────────────────────────────────

@@ -60,6 +60,7 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::put('vehicles/{vehicle}',      [VehicleController::class, 'update']);
             Route::patch('vehicles/{vehicle}',    [VehicleController::class, 'update']);
             Route::delete('vehicles/{vehicle}',   [VehicleController::class, 'destroy']);
+            Route::post('vehicles/{vehicle}/decode-vin', [VehicleController::class, 'decodeVin']);
 
             // Media
             Route::post('vehicles/{vehicle}/media',          [VehicleMediaController::class, 'store']);

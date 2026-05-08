@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Models\Vehicle;
 use App\Repositories\VehicleRepositoryInterface;
 use App\Services\InventoryService;
+use App\Services\VinDecodeService;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Mockery;
@@ -21,12 +22,16 @@ class InventoryServiceTest extends TestCase
     /** @var \Mockery\MockInterface&VehicleRepositoryInterface */
     private $vehicles;
 
+    /** @var \Mockery\MockInterface&VinDecodeService */
+    private $vinDecoder;
+
     protected function setUp(): void
     {
         parent::setUp();
 
-        $this->vehicles = Mockery::mock(VehicleRepositoryInterface::class);
-        $this->service  = new InventoryService($this->vehicles);
+        $this->vehicles   = Mockery::mock(VehicleRepositoryInterface::class);
+        $this->vinDecoder = Mockery::mock(VinDecodeService::class);
+        $this->service    = new InventoryService($this->vehicles, $this->vinDecoder);
     }
 
     protected function tearDown(): void

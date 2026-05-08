@@ -288,4 +288,35 @@ class VehicleController extends BaseController
             ]),
         ]);
     }
+
+    /**
+     * Trigger on-demand VIN decode enrichment for a single vehicle.
+     *
+     * Only blank / null spec fields are filled in — the dealer's existing data
+     * is never overwritten.  A 422 is returned when the vehicle has no VIN.
+     */
+    public function decodeVin(Request $request, Vehicle $vehicle): JsonResponse
+    {
+        $dealer = app('current_dealer');
+
+        if ($vehicle->dealer_id !== $dealer->id) {
+            abort(403, 'Vehicle does not belong to this dealer.');
+        }
+
+        if (! $vehicle->vin) {
+            return response()->json([
+                'message' => 'Vehicle has no VIN and cannot be decoded.',
+            ], 422);
+        }
+
+        $applied = $this->inventory->enrichFromVin($vehicle);
+
+        return response()->json([
+            'data' => new VehicleResource($vehicle->fresh()),
+            'meta' => [
+                'enriched_fields' => $applied,
+                'vin_decoded_at'  => $vehicle->vin_decoded_at,
+            ],
+        ]);
+    }
 }

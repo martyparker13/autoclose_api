@@ -8,6 +8,7 @@ use App\Models\VehicleMedia;
 use App\Repositories\VehicleRepositoryInterface;
 use Illuminate\Contracts\Pagination\CursorPaginator;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
 
 class InventoryService
@@ -27,8 +28,15 @@ class InventoryService
     /** @var list<string> */
     private const SYNC_VALID_STATUSES = ['available', 'pending', 'sold', 'hold'];
 
+    /** Fields that VIN decode may fill in automatically when absent from the payload. */
+    private const VIN_ENRICHABLE_FIELDS = [
+        'make', 'model', 'year', 'trim', 'body_style',
+        'drivetrain', 'fuel_type', 'transmission', 'doors', 'cylinders', 'engine',
+    ];
+
     public function __construct(
         private readonly VehicleRepositoryInterface $vehicles,
+        private readonly VinDecodeService $vinDecoder,
     ) {}
 
     /**
@@ -331,6 +339,20 @@ class InventoryService
                 }
             }
 
+            // VIN decode enrichment — fill missing spec fields when a 17-char VIN is present.
+            if ($vin) {
+                $decoded = $this->vinDecoder->decode($vin);
+                if (! empty($decoded)) {
+                    foreach (self::VIN_ENRICHABLE_FIELDS as $field) {
+                        // Only apply decoded value when the payload did not already supply it.
+                        if (! array_key_exists($field, $values) && isset($decoded[$field])) {
+                            $values[$field] = $decoded[$field];
+                        }
+                    }
+                    $values['vin_decoded_at'] = Carbon::now();
+                }
+            }
+
             $matchColumn = $vin ? 'vin' : 'stock_number';
             $existing = Vehicle::where('dealer_id', $dealer->id)
                 ->where($matchColumn, $attributes[$matchColumn])
@@ -355,6 +377,43 @@ class InventoryService
             'incoming_vins' => array_values(array_unique($incomingVins)),
             'incoming_stocks' => array_values(array_unique($incomingStocks)),
         ];
+    }
+
+    /**
+     * Enrich a single vehicle by decoding its VIN against the NHTSA vPIC API.
+     *
+     * Only blank / null fields are overwritten — existing data is never clobbered.
+     * Returns the list of field names that were updated, or an empty array if nothing changed.
+     *
+     * @return list<string>
+     */
+    public function enrichFromVin(Vehicle $vehicle): array
+    {
+        if (! $vehicle->vin || strlen($vehicle->vin) !== 17) {
+            return [];
+        }
+
+        $decoded = $this->vinDecoder->decode($vehicle->vin);
+
+        if (empty($decoded)) {
+            return [];
+        }
+
+        $applied = [];
+
+        foreach (self::VIN_ENRICHABLE_FIELDS as $field) {
+            if (isset($decoded[$field]) && ($vehicle->{$field} === null || $vehicle->{$field} === '')) {
+                $vehicle->{$field} = $decoded[$field];
+                $applied[] = $field;
+            }
+        }
+
+        if (! empty($applied)) {
+            $vehicle->vin_decoded_at = Carbon::now();
+            $vehicle->save();
+        }
+
+        return $applied;
     }
 
     /**
