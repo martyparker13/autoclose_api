@@ -530,6 +530,84 @@ class ReportingService
     }
 
     /**
+     * Workflow automation activity overview for a single dealer.
+     *
+     * @return array{
+     *   period_days: int,
+     *   total_events: int,
+     *   reminders: int,
+     *   escalations: int,
+     *   next_steps: int,
+     *   unique_deals_touched: int,
+     *   top_events: list<array{event: string, total: int}>,
+     *   daily: list<array{date: string, total: int}>
+     * }
+     */
+    public function workflowAutomationOverviewForDealer(Dealer $dealer, int $days = 14): array
+    {
+        $start = now()->subDays($days - 1)->startOfDay();
+
+        $base = ActivityLog::query()
+            ->where('dealer_id', $dealer->id)
+            ->where('created_at', '>=', $start)
+            ->where('event', 'like', 'workflow.%');
+
+        $totalEvents = (clone $base)->count();
+        $reminders = (clone $base)->where('event', 'like', 'workflow.reminder.%')->count();
+        $escalations = (clone $base)->where('event', 'like', 'workflow.escalation.%')->count();
+        $nextSteps = (clone $base)->where('event', 'like', 'workflow.next_step.%')->count();
+
+        $uniqueDealsTouched = (clone $base)
+            ->where('model_type', Deal::class)
+            ->whereNotNull('model_id')
+            ->distinct('model_id')
+            ->count('model_id');
+
+        $topEvents = (clone $base)
+            ->select('event', DB::raw('COUNT(*) as total'))
+            ->groupBy('event')
+            ->orderByDesc('total')
+            ->limit(8)
+            ->get()
+            ->map(fn ($row) => [
+                'event' => $row->event,
+                'total' => (int) $row->total,
+            ])
+            ->all();
+
+        $dailyRows = (clone $base)
+            ->select(
+                DB::raw('DATE(created_at) as date'),
+                DB::raw('COUNT(*) as total'),
+            )
+            ->groupBy('date')
+            ->orderBy('date')
+            ->get()
+            ->keyBy('date');
+
+        $daily = [];
+        for ($i = $days - 1; $i >= 0; $i--) {
+            $date = now()->subDays($i)->toDateString();
+            $row = $dailyRows->get($date);
+            $daily[] = [
+                'date' => $date,
+                'total' => $row ? (int) $row->total : 0,
+            ];
+        }
+
+        return [
+            'period_days' => $days,
+            'total_events' => $totalEvents,
+            'reminders' => $reminders,
+            'escalations' => $escalations,
+            'next_steps' => $nextSteps,
+            'unique_deals_touched' => $uniqueDealsTouched,
+            'top_events' => $topEvents,
+            'daily' => $daily,
+        ];
+    }
+
+    /**
      * Workflow automation activity overview for super admins.
      *
      * @return array{

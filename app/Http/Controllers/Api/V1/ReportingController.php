@@ -145,6 +145,21 @@ class ReportingController extends BaseController
     }
 
     /**
+     * GET /dealer/reports/workflow-automation?days=14
+     *
+     * Dealer workflow automation health and volume.
+     */
+    public function workflowAutomation(Request $request): JsonResponse
+    {
+        $request->validate(['days' => ['nullable', 'integer', 'min:7', 'max:60']]);
+
+        $dealer = app('current_dealer');
+        $data = $this->reporting->workflowAutomationOverviewForDealer($dealer, (int) $request->input('days', 14));
+
+        return response()->json(['data' => $data]);
+    }
+
+    /**
      * GET /admin/reports/summary?period=30d
      *
      * Platform-wide KPI summary for super admins.

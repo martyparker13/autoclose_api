@@ -178,6 +178,7 @@ Route::middleware('auth:sanctum')->group(function () {
                 Route::get('time-to-close',  [ReportingController::class, 'timeToClose']);
                 Route::get('fi-attach-rate', [ReportingController::class, 'fiAttachRate']);
                 Route::get('credit-approval',[ReportingController::class, 'creditApproval']);
+                Route::get('workflow-automation', [ReportingController::class, 'workflowAutomation']);
             });
 
             // Audit log — dealer admin view
