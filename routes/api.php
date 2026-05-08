@@ -16,7 +16,6 @@ use App\Http\Controllers\Api\V1\ReportingController;
 use App\Http\Controllers\Api\V1\VehicleController;
 use App\Http\Controllers\Api\V1\VehicleFeatureController;
 use App\Http\Controllers\Api\V1\VehicleMediaController;
-use App\Http\Controllers\Api\V1\VehicleSyncController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -201,5 +200,5 @@ Route::middleware(['auth:sanctum', 'tenant', 'role:dealer_admin'])->group(functi
 
 // ── Inventory sync via API key (no Sanctum — server-to-server) ───────────
 Route::middleware('auth.api_key')->group(function () {
-    Route::post('vehicles/sync', VehicleSyncController::class);
+    Route::post('vehicles/sync', [VehicleController::class, 'sync']);
 });
