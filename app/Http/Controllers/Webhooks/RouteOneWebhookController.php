@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Webhooks;
 
 use App\Http\Controllers\Api\V1\BaseController;
 use App\Services\Integrations\CreditDecisionService;
+use App\Services\Integrations\EContractService;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -34,6 +35,7 @@ class RouteOneWebhookController extends BaseController
 {
     public function __construct(
         private readonly CreditDecisionService $creditDecisions,
+        private readonly EContractService $eContracts,
     ) {}
 
     public function handle(Request $request): JsonResponse
@@ -59,6 +61,21 @@ class RouteOneWebhookController extends BaseController
         $event         = $data['event']          ?? null;
         $applicationId = $data['application_id'] ?? null;
         $decision      = $data['decision']        ?? null;
+
+        // ── eContract signed callback ──────────────────────────────────────
+        if ($event === 'contract_signed') {
+            $contractId = $data['contract_id'] ?? null;
+            if ($contractId) {
+                try {
+                    $this->eContracts->handleSigned('routeone', (string) $contractId);
+                } catch (\Throwable $e) {
+                    Log::error('RouteOne webhook: eContract signed processing failed', ['error' => $e->getMessage()]);
+                }
+            } else {
+                Log::warning('RouteOne webhook: contract_signed missing contract_id', ['payload' => $data]);
+            }
+            return response()->json(['received' => true]);
+        }
 
         // Only process decision events
         if ($event !== 'credit_decision') {

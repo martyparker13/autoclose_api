@@ -35,6 +35,7 @@ class Deal extends Model
         'salesperson_id',
         'source',
         'notes',
+        'econtract_pushes',
         'deposit_paid_at',
         'deposit_payment_id',
         'deposit_amount',
@@ -44,6 +45,7 @@ class Deal extends Model
     protected $casts = [
         'trade_in_vehicle' => 'array',
         'fi_products'      => 'array',
+        'econtract_pushes' => 'array',
         'sale_price'       => 'integer',
         'down_payment'     => 'integer',
         'trade_in_value'   => 'integer',

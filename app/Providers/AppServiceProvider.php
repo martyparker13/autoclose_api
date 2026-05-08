@@ -4,10 +4,12 @@ namespace App\Providers;
 
 use App\Events\DealStatusChanged;
 use App\Listeners\PushCreditApplication;
+use App\Listeners\PushEContract;
 use App\Listeners\SendDealStatusNotification;
 use App\Listeners\TriggerPostPurchaseJourney;
 use App\Services\Integrations\CreditDecisionService;
 use App\Services\Integrations\DealerTrackService;
+use App\Services\Integrations\EContractService;
 use App\Services\Integrations\RouteOneService;
 use App\Models\Deal;
 use App\Models\User;
@@ -35,6 +37,7 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(DealerTrackService::class);
         $this->app->singleton(RouteOneService::class);
         $this->app->singleton(CreditDecisionService::class);
+        $this->app->singleton(EContractService::class);
     }
 
     /**
@@ -49,5 +52,6 @@ class AppServiceProvider extends ServiceProvider
         Event::listen(DealStatusChanged::class, SendDealStatusNotification::class);
         Event::listen(DealStatusChanged::class, TriggerPostPurchaseJourney::class);
         Event::listen(DealStatusChanged::class, PushCreditApplication::class);
+        Event::listen(DealStatusChanged::class, PushEContract::class);
     }
 }

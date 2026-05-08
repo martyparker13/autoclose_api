@@ -9,6 +9,7 @@ use App\Http\Requests\Deal\UpdateDealRequest;
 use App\Http\Resources\DealResource;
 use App\Models\Deal;
 use App\Services\DealService;
+use App\Services\Integrations\EContractService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -17,6 +18,7 @@ class DealController extends BaseController
 {
     public function __construct(
         private readonly DealService $service,
+        private readonly EContractService $eContracts,
     ) {}
 
     /**
@@ -122,6 +124,33 @@ class DealController extends BaseController
         $this->authorize('update', $model);
 
         $model = $this->service->syncFiProducts($model, $dealer, $request->validated()['products']);
+
+        return $this->resourceResponse(new DealResource($model));
+    }
+
+    /**
+     * Manually (re-)push the eContract package to DealerTrack / RouteOne.
+     *
+     * Allows re-sending from docs_pending or docs_signed status (e.g. if first
+     * attempt failed or to resend to a different buyer email address).
+     */
+    public function pushEContract(Request $request, int $deal): JsonResponse
+    {
+        $dealer = app('current_dealer');
+        $model  = $this->service->getForDealer($deal, $dealer);
+
+        $this->authorize('update', $model);
+
+        if (! in_array($model->status, ['docs_pending', 'docs_signed'], true)) {
+            return $this->errorResponse(
+                'eContract can only be sent when the deal is in docs_pending or docs_signed status.',
+                422
+            );
+        }
+
+        $this->eContracts->push($dealer, $model);
+
+        $model->refresh();
 
         return $this->resourceResponse(new DealResource($model));
     }

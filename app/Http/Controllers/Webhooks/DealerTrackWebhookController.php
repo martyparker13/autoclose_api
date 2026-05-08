@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Webhooks;
 
 use App\Http\Controllers\Api\V1\BaseController;
 use App\Services\Integrations\CreditDecisionService;
+use App\Services\Integrations\EContractService;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -37,6 +38,7 @@ class DealerTrackWebhookController extends BaseController
 {
     public function __construct(
         private readonly CreditDecisionService $creditDecisions,
+        private readonly EContractService $eContracts,
     ) {}
 
     public function handle(Request $request): JsonResponse
@@ -63,6 +65,21 @@ class DealerTrackWebhookController extends BaseController
         $applicationId = $data['applicationId'] ?? null;
         $decisionData  = $data['decision']      ?? [];
         $status        = $decisionData['status'] ?? null;
+
+        // ── eContract signed callback ──────────────────────────────────────
+        if ($eventType === 'CONTRACT_SIGNED' || $eventType === 'ECONTRACT_SIGNED') {
+            $contractId = $data['contractId'] ?? $data['applicationId'] ?? null;
+            if ($contractId) {
+                try {
+                    $this->eContracts->handleSigned('dealertrack', (string) $contractId);
+                } catch (\Throwable $e) {
+                    Log::error('DealerTrack webhook: eContract signed processing failed', ['error' => $e->getMessage()]);
+                }
+            } else {
+                Log::warning('DealerTrack webhook: CONTRACT_SIGNED missing contractId', ['payload' => $data]);
+            }
+            return response()->json(['received' => true]);
+        }
 
         // Only process decision events
         if ($eventType !== 'APPLICATION_DECISION_UPDATED') {

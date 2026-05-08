@@ -268,4 +268,126 @@ class DealerTrackService
             ],
         ];
     }
+
+    // ── eContracting ──────────────────────────────────────────────────────────
+
+    /**
+     * Push a retail finance contract to DealerTrack for electronic signing.
+     *
+     * Scope: dealertrack.econtract.write
+     *
+     * @return array{success: bool, external_id: string|null, signing_url: string|null, error: string|null}
+     */
+    public function pushContract(Dealer $dealer, Deal $deal): array
+    {
+        $creds = $dealer->dealertrack_credentials;
+
+        if (empty($creds)) {
+            return ['success' => false, 'external_id' => null, 'signing_url' => null, 'error' => 'No DealerTrack credentials configured'];
+        }
+
+        try {
+            $token = $this->fetchToken($creds['client_id'], $creds['client_secret'], 'dealertrack.econtract.write');
+        } catch (\Throwable $e) {
+            Log::warning('DealerTrack: eContract token fetch failed', [
+                'dealer_id' => $dealer->id,
+                'deal_id'   => $deal->id,
+                'error'     => $e->getMessage(),
+            ]);
+            return ['success' => false, 'external_id' => null, 'signing_url' => null, 'error' => 'Authentication failed: '.$e->getMessage()];
+        }
+
+        try {
+            $payload  = $this->buildContractPayload($creds['dealer_id'], $deal);
+            $response = Http::timeout(self::TIMEOUT)
+                ->withToken($token)
+                ->post(self::API_BASE.'/econtracts', $payload);
+
+            if ($response->successful()) {
+                $externalId  = $response->json('contractId') ?? $response->json('id');
+                $signingUrl  = $response->json('signingUrl') ?? $response->json('signing_url');
+                Log::info('DealerTrack: eContract pushed', [
+                    'dealer_id'   => $dealer->id,
+                    'deal_id'     => $deal->id,
+                    'external_id' => $externalId,
+                ]);
+                return ['success' => true, 'external_id' => (string) $externalId, 'signing_url' => $signingUrl, 'error' => null];
+            }
+
+            $errorMsg = $response->json('message') ?? $response->json('error') ?? 'HTTP '.$response->status();
+            Log::warning('DealerTrack: eContract push rejected', [
+                'dealer_id' => $dealer->id,
+                'deal_id'   => $deal->id,
+                'status'    => $response->status(),
+                'body'      => $response->body(),
+            ]);
+            return ['success' => false, 'external_id' => null, 'signing_url' => null, 'error' => $errorMsg];
+
+        } catch (\Throwable $e) {
+            Log::error('DealerTrack: eContract push exception', [
+                'dealer_id' => $dealer->id,
+                'deal_id'   => $deal->id,
+                'error'     => $e->getMessage(),
+            ]);
+            return ['success' => false, 'external_id' => null, 'signing_url' => null, 'error' => $e->getMessage()];
+        }
+    }
+
+    /**
+     * Build the DealerTrack eContract payload.
+     *
+     * @return array<string, mixed>
+     */
+    private function buildContractPayload(string $dealertrackDealerId, Deal $deal): array
+    {
+        $vehicle = $deal->vehicle;
+        $buyer   = $deal->buyer;
+
+        $toPrice = fn (?int $cents): float => round(($cents ?? 0) / 100, 2);
+
+        $fiProducts = [];
+        foreach ($deal->dealFiProducts ?? [] as $dfp) {
+            $product = $dfp->fiProduct ?? null;
+            if ($product) {
+                $fiProducts[] = [
+                    'name'    => $product->name,
+                    'type'    => $product->type,
+                    'premium' => $toPrice($dfp->price),
+                ];
+            }
+        }
+
+        return [
+            'dealerId'     => $dealertrackDealerId,
+            'contractType' => ($deal->finance_amount && $deal->finance_amount > 0)
+                ? 'RETAIL_INSTALLMENT'
+                : 'CASH',
+            'buyer' => [
+                'firstName' => $buyer?->first_name ?? '',
+                'lastName'  => $buyer?->last_name ?? '',
+                'email'     => $buyer?->email ?? '',
+                'phone'     => $buyer?->phone ?? '',
+            ],
+            'vehicle' => [
+                'vin'         => $vehicle?->vin,
+                'year'        => $vehicle?->year,
+                'make'        => $vehicle?->make,
+                'model'       => $vehicle?->model,
+                'trim'        => $vehicle?->trim,
+                'stockNumber' => $vehicle?->stock_number,
+                'odometer'    => $vehicle?->mileage ?? 0,
+            ],
+            'deal' => [
+                'salePrice'     => $toPrice($deal->sale_price),
+                'downPayment'   => $toPrice($deal->down_payment),
+                'tradeInValue'  => $toPrice($deal->trade_in_value),
+                'financeAmount' => $toPrice($deal->finance_amount),
+                'apr'           => $deal->apr,
+                'termMonths'    => $deal->term_months,
+                'monthlyPayment'=> $toPrice($deal->monthly_payment),
+                'lender'        => $deal->lender,
+            ],
+            'fiProducts' => $fiProducts,
+        ];
+    }
 }

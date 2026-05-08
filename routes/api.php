@@ -111,6 +111,7 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::patch('dealer/deals/{deal}',                      [DealController::class, 'update']);
             Route::patch('dealer/deals/{deal}/transition',           [DealController::class, 'transition']);
             Route::put('dealer/deals/{deal}/fi-products',            [DealController::class, 'syncFiProducts']);
+            Route::post('dealer/deals/{deal}/econtract',             [DealController::class, 'pushEContract']);
             Route::delete('dealer/deals/{deal}',                     [DealController::class, 'destroy']);
 
             // Trade-in — dealer responds with offer

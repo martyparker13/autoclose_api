@@ -116,4 +116,113 @@ class RouteOneService
             ],
         ];
     }
+
+    // ── eContracting ──────────────────────────────────────────────────────────
+
+    /**
+     * Push a retail finance contract to RouteOne for electronic signing.
+     *
+     * @return array{success: bool, external_id: string|null, signing_url: string|null, error: string|null}
+     */
+    public function pushContract(Dealer $dealer, Deal $deal): array
+    {
+        $creds = $dealer->routeone_credentials;
+
+        if (empty($creds)) {
+            return ['success' => false, 'external_id' => null, 'signing_url' => null, 'error' => 'No RouteOne credentials configured'];
+        }
+
+        try {
+            $payload  = $this->buildContractPayload($creds['dealer_code'] ?? '', $deal);
+            $response = Http::timeout(self::TIMEOUT)
+                ->withHeaders(['X-API-Key' => $creds['api_key']])
+                ->post(self::API_BASE.'/econtract', $payload);
+
+            if ($response->successful()) {
+                $externalId = $response->json('contract_id') ?? $response->json('id');
+                $signingUrl = $response->json('signing_url');
+                Log::info('RouteOne: eContract pushed', [
+                    'dealer_id'   => $dealer->id,
+                    'deal_id'     => $deal->id,
+                    'external_id' => $externalId,
+                ]);
+                return ['success' => true, 'external_id' => (string) $externalId, 'signing_url' => $signingUrl, 'error' => null];
+            }
+
+            $errorMsg = $response->json('message') ?? $response->json('error') ?? 'HTTP '.$response->status();
+            Log::warning('RouteOne: eContract push rejected', [
+                'dealer_id' => $dealer->id,
+                'deal_id'   => $deal->id,
+                'status'    => $response->status(),
+                'body'      => $response->body(),
+            ]);
+            return ['success' => false, 'external_id' => null, 'signing_url' => null, 'error' => $errorMsg];
+
+        } catch (\Throwable $e) {
+            Log::error('RouteOne: eContract push exception', [
+                'dealer_id' => $dealer->id,
+                'deal_id'   => $deal->id,
+                'error'     => $e->getMessage(),
+            ]);
+            return ['success' => false, 'external_id' => null, 'signing_url' => null, 'error' => $e->getMessage()];
+        }
+    }
+
+    /**
+     * Build the RouteOne eContract payload.
+     *
+     * @return array<string, mixed>
+     */
+    private function buildContractPayload(string $dealerCode, Deal $deal): array
+    {
+        $vehicle = $deal->vehicle;
+        $buyer   = $deal->buyer;
+
+        $toPrice = fn (?int $cents): float => round(($cents ?? 0) / 100, 2);
+
+        $fiProducts = [];
+        foreach ($deal->dealFiProducts ?? [] as $dfp) {
+            $product = $dfp->fiProduct ?? null;
+            if ($product) {
+                $fiProducts[] = [
+                    'product_name' => $product->name,
+                    'product_type' => $product->type,
+                    'premium'      => $toPrice($dfp->price),
+                ];
+            }
+        }
+
+        return [
+            'dealer_code'     => $dealerCode,
+            'contract_type'   => ($deal->finance_amount && $deal->finance_amount > 0)
+                ? 'RETAIL_INSTALLMENT'
+                : 'CASH',
+            'buyer' => [
+                'first_name' => $buyer?->first_name ?? '',
+                'last_name'  => $buyer?->last_name ?? '',
+                'email'      => $buyer?->email ?? '',
+                'phone'      => $buyer?->phone ?? '',
+            ],
+            'vehicle' => [
+                'vin'          => $vehicle?->vin,
+                'year'         => $vehicle?->year,
+                'make'         => $vehicle?->make,
+                'model'        => $vehicle?->model,
+                'trim'         => $vehicle?->trim,
+                'stock_number' => $vehicle?->stock_number,
+                'odometer'     => $vehicle?->mileage ?? 0,
+            ],
+            'deal' => [
+                'sale_price'      => $toPrice($deal->sale_price),
+                'down_payment'    => $toPrice($deal->down_payment),
+                'trade_in_value'  => $toPrice($deal->trade_in_value),
+                'finance_amount'  => $toPrice($deal->finance_amount),
+                'apr'             => $deal->apr,
+                'term_months'     => $deal->term_months,
+                'monthly_payment' => $toPrice($deal->monthly_payment),
+                'lender'          => $deal->lender,
+            ],
+            'fi_products' => $fiProducts,
+        ];
+    }
 }

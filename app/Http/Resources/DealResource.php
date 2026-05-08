@@ -25,6 +25,7 @@ class DealResource extends JsonResource
             'total_fi_income'  => $this->total_fi_income !== null ? round($this->total_fi_income / 100, 2) : null,
             'lender'           => $this->lender,
             'notes'            => $this->notes,
+            'econtract_pushes' => $this->econtract_pushes ?? [],
             'vehicle'          => new VehicleResource($this->whenLoaded('vehicle')),
             'buyer'            => new UserResource($this->whenLoaded('buyer')),
             'salesperson'      => new UserResource($this->whenLoaded('salesperson')),
