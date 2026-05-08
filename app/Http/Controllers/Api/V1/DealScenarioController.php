@@ -10,7 +10,6 @@ use App\Services\DeskingService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
-use Illuminate\Validation\ValidationException;
 
 class DealScenarioController extends Controller
 {
@@ -22,9 +21,9 @@ class DealScenarioController extends Controller
      * GET dealer/deals/{deal}/scenarios
      * List the 3 saved scenarios for a deal.
      */
-    public function index(Deal $deal): AnonymousResourceCollection
+    public function index(Request $request, Deal $deal): AnonymousResourceCollection
     {
-        $this->authorizeDealAccess($deal);
+        $this->authorizeDealAccess($request, $deal);
 
         return DealScenarioResource::collection(
             $deal->scenarios()->get()
@@ -38,7 +37,7 @@ class DealScenarioController extends Controller
      */
     public function generate(Request $request, Deal $deal): AnonymousResourceCollection
     {
-        $this->authorizeDealAccess($deal);
+        $this->authorizeDealAccess($request, $deal);
 
         $validated = $request->validate([
             'fi_product_ids'   => 'sometimes|array',
@@ -58,7 +57,7 @@ class DealScenarioController extends Controller
      */
     public function update(Request $request, Deal $deal, DealScenario $scenario): DealScenarioResource
     {
-        $this->authorizeDealAccess($deal);
+        $this->authorizeDealAccess($request, $deal);
 
         if ($scenario->deal_id !== $deal->id) {
             abort(404);
@@ -99,9 +98,9 @@ class DealScenarioController extends Controller
      * POST dealer/deals/{deal}/scenarios/{scenario}/select
      * Mark scenario as selected and write its terms to the deal.
      */
-    public function select(Deal $deal, DealScenario $scenario): JsonResponse
+    public function select(Request $request, Deal $deal, DealScenario $scenario): JsonResponse
     {
-        $this->authorizeDealAccess($deal);
+        $this->authorizeDealAccess($request, $deal);
 
         if ($scenario->deal_id !== $deal->id) {
             abort(404);
@@ -117,9 +116,9 @@ class DealScenarioController extends Controller
 
     // ── Private helpers ───────────────────────────────────────────────────
 
-    private function authorizeDealAccess(Deal $deal): void
+    private function authorizeDealAccess(Request $request, Deal $deal): void
     {
-        $user = auth()->user();
+        $user = $request->user();
 
         // Buyer: must own the deal
         if ($user->role === 'buyer') {
