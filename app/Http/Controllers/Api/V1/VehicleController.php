@@ -250,4 +250,42 @@ class VehicleController extends BaseController
             ],
         ]);
     }
+
+    /**
+     * Return recent asynchronous DMS sync runs for the current dealer.
+     */
+    public function syncRuns(Request $request): JsonResponse
+    {
+        $dealer = app('current_dealer');
+        $limit = max(1, min((int) $request->query('limit', 10), 50));
+
+        $runs = DealerSyncRun::where('dealer_id', $dealer->id)
+            ->orderByDesc('created_at')
+            ->limit($limit)
+            ->get();
+
+        return response()->json([
+            'data' => $runs->map(fn (DealerSyncRun $run) => [
+                'sync_run_id' => $run->public_id,
+                'status' => $run->status,
+                'archive_missing' => $run->archive_missing,
+                'total_records' => $run->total_records,
+                'chunk_size' => $run->chunk_size,
+                'total_jobs' => $run->total_jobs,
+                'processed_jobs' => $run->processed_jobs,
+                'progress_percent' => $run->total_jobs > 0
+                    ? (int) floor(($run->processed_jobs / $run->total_jobs) * 100)
+                    : 0,
+                'created' => $run->created,
+                'updated' => $run->updated,
+                'skipped' => $run->skipped,
+                'archived' => $run->archived,
+                'error_count' => $run->error_count,
+                'started_at' => $run->started_at,
+                'completed_at' => $run->completed_at,
+                'created_at' => $run->created_at,
+                'updated_at' => $run->updated_at,
+            ]),
+        ]);
+    }
 }
