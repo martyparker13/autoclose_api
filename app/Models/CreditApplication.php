@@ -30,6 +30,7 @@ class CreditApplication extends Model
         'approved_term',
         'submitted_at',
         'decided_at',
+        'integration_pushes',
     ];
 
     /** @var list<string> */
@@ -47,8 +48,9 @@ class CreditApplication extends Model
         'monthly_housing' => 'integer',
         'approved_amount' => 'integer',
         'approved_apr'    => 'float',
-        'submitted_at'    => 'datetime',
-        'decided_at'      => 'datetime',
+        'submitted_at'        => 'datetime',
+        'decided_at'          => 'datetime',
+        'integration_pushes'  => 'array',
     ];
 
     /** @return BelongsTo<Deal, CreditApplication> */

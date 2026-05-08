@@ -27,6 +27,7 @@ class CreditApplicationResource extends JsonResource
             'approved_amount'    => $this->approved_amount !== null ? round($this->approved_amount / 100, 2) : null,
             'approved_apr'       => $this->approved_apr,
             'approved_term'      => $this->approved_term,
+            'integration_pushes' => $this->integration_pushes ?? [],
             'created_at'         => $this->created_at?->toISOString(),
             'updated_at'         => $this->updated_at?->toISOString(),
         ];
