@@ -43,7 +43,7 @@ class CreditApplication extends Model
     protected $casts = [
         'ssn_encrypted'   => 'encrypted',
         'bureau_response' => 'encrypted:array',
-        'dob'             => 'date',
+        'dob'             => 'datetime',
         'annual_income'   => 'integer',
         'monthly_housing' => 'integer',
         'approved_amount' => 'integer',

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Http\Controllers\Controller;
 use App\Http\Resources\DealMessageResource;
 use App\Models\Deal;
 use Illuminate\Http\JsonResponse;
