@@ -127,4 +127,10 @@ class Deal extends Model
     {
         return $this->hasMany(DealScenario::class)->orderBy('label');
     }
+
+    /** @return HasMany<DealMessage> */
+    public function messages(): HasMany
+    {
+        return $this->hasMany(DealMessage::class)->orderBy('created_at');
+    }
 }

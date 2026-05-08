@@ -153,6 +153,33 @@ class DealerController extends BaseController
     }
 
     /**
+     * Update desking / payment penciling configuration for the current dealer.
+     * Dealer admin only — sets default APR and Good/Better/Best loan terms.
+     */
+    public function updateDeskingConfig(Request $request): JsonResponse
+    {
+        $dealer = app('current_dealer');
+
+        $data = $request->validate([
+            'default_apr' => ['required', 'numeric', 'min:0', 'max:100'],
+            'good_term'   => ['required', 'integer', 'min:12', 'max:120'],
+            'better_term' => ['required', 'integer', 'min:12', 'max:120'],
+            'best_term'   => ['required', 'integer', 'min:12', 'max:120'],
+        ]);
+
+        $config = [
+            'default_apr' => (float) $data['default_apr'],
+            'good_term'   => (int)   $data['good_term'],
+            'better_term' => (int)   $data['better_term'],
+            'best_term'   => (int)   $data['best_term'],
+        ];
+
+        $dealer->update(['desking_config' => $config]);
+
+        return response()->json(['data' => ['desking_config' => $dealer->fresh()->desking_config]]);
+    }
+
+    /**
      * Restore a soft-deleted dealer.
      */
     public function restore(int $dealer): JsonResponse

@@ -16,6 +16,8 @@ use App\Http\Controllers\Api\V1\DocuSignWebhookController;
 use App\Http\Controllers\Webhooks\DealerTrackWebhookController;
 use App\Http\Controllers\Webhooks\RouteOneWebhookController;
 use App\Http\Controllers\Api\V1\FiProductController;
+use App\Http\Controllers\Api\V1\DealMessageController;
+use App\Http\Controllers\Api\V1\NotificationsController;
 use App\Http\Controllers\Api\V1\TradeInAppraisalController;
 use App\Http\Controllers\Api\V1\ReportingController;
 use App\Http\Controllers\Api\V1\VehicleController;
@@ -52,6 +54,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('auth/me',          [AuthController::class, 'me']);
     Route::patch('auth/me',        [AuthController::class, 'updateProfile']);
     Route::delete('auth/logout',   [AuthController::class, 'logout']);
+
+    // Notifications (all authenticated users)
+    Route::get('notifications',             [NotificationsController::class, 'index']);
+    Route::get('notifications/unread-count',[NotificationsController::class, 'unreadCount']);
+    Route::post('notifications/read-all',   [NotificationsController::class, 'markAllRead']);
+    Route::patch('notifications/{id}',      [NotificationsController::class, 'markRead']);
 
     // Staff invite — dealer admin only, tenant context required
     Route::middleware(['tenant', 'role:dealer_admin'])->group(function () {
@@ -100,6 +108,10 @@ Route::middleware('auth:sanctum')->group(function () {
             // Desking — buyer can view and select their own scenarios
             Route::get('deals/{deal}/scenarios',                              [DealScenarioController::class, 'index']);
             Route::post('deals/{deal}/scenarios/{scenario}/select',           [DealScenarioController::class, 'select']);
+
+            // Messaging — buyer can read & post messages on their own deals
+            Route::get('deals/{deal}/messages',  [DealMessageController::class, 'index']);
+            Route::post('deals/{deal}/messages', [DealMessageController::class, 'store']);
         });
 
         // Dealer admin/staff — manage all deals in their store
@@ -107,6 +119,7 @@ Route::middleware('auth:sanctum')->group(function () {
             // Branding — dealer admin can update their own dealership's branding
             Route::patch('dealer/settings/branding',    [AdminDealerController::class, 'updateBranding']);
             Route::post('dealer/settings/logo',         [AdminDealerController::class, 'uploadLogo']);
+            Route::patch('dealer/settings/desking',     [AdminDealerController::class, 'updateDeskingConfig']);
 
             // Integrations — DealerTrack & RouteOne credential management (dealer admin only)
             Route::middleware('role:dealer_admin')->group(function () {
@@ -129,6 +142,10 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::post('dealer/deals/{deal}/scenarios/generate',                  [DealScenarioController::class, 'generate']);
             Route::put('dealer/deals/{deal}/scenarios/{scenario}',                 [DealScenarioController::class, 'update']);
             Route::post('dealer/deals/{deal}/scenarios/{scenario}/select',         [DealScenarioController::class, 'select']);
+
+            // Messaging — dealer staff can read & post messages on any deal in their store
+            Route::get('dealer/deals/{deal}/messages',  [DealMessageController::class, 'index']);
+            Route::post('dealer/deals/{deal}/messages', [DealMessageController::class, 'store']);
 
             // Trade-in — dealer responds with offer
             Route::patch('dealer/deals/{deal}/trade-in/{appraisal}', [TradeInAppraisalController::class, 'respond']);
