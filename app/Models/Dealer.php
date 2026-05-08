@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
@@ -38,6 +39,7 @@ class Dealer extends Model
         'dealertrack_credentials',
         'routeone_credentials',
         'desking_config',
+        'dealer_group_id',
     ];
 
     /** @var list<string> */
@@ -59,6 +61,12 @@ class Dealer extends Model
     ];
 
     // ── Relationships ────────────────────────────────────────────────────
+
+    /** @return BelongsTo<DealerGroup, Dealer> */
+    public function dealerGroup(): BelongsTo
+    {
+        return $this->belongsTo(DealerGroup::class);
+    }
 
     /** @return HasMany<User> */
     public function users(): HasMany

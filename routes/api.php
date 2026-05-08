@@ -1,6 +1,8 @@
 <?php
 
 use App\Http\Controllers\Api\V1\Admin\DealerController as AdminDealerController;
+use App\Http\Controllers\Api\V1\Admin\DealerGroupController as AdminDealerGroupController;
+use App\Http\Controllers\Api\V1\GroupController;
 use App\Http\Controllers\Api\V1\Admin\DealerIntegrationController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\CreditApplicationController;
@@ -260,6 +262,16 @@ Route::middleware(['auth:sanctum', 'role:super_admin'])->prefix('admin')->group(
     Route::patch('dealers/{dealer}',             [AdminDealerController::class, 'update']);
     Route::delete('dealers/{dealer}',            [AdminDealerController::class, 'destroy']);
     Route::post('dealers/{dealer}/restore',      [AdminDealerController::class, 'restore']);
+
+    // Dealer groups
+    Route::get('groups',                                     [AdminDealerGroupController::class, 'index']);
+    Route::post('groups',                                    [AdminDealerGroupController::class, 'store']);
+    Route::get('groups/{group}',                             [AdminDealerGroupController::class, 'show']);
+    Route::patch('groups/{group}',                           [AdminDealerGroupController::class, 'update']);
+    Route::delete('groups/{group}',                          [AdminDealerGroupController::class, 'destroy']);
+    Route::post('groups/{group}/restore',                    [AdminDealerGroupController::class, 'restore']);
+    Route::post('groups/{group}/dealers/{dealer}',           [AdminDealerGroupController::class, 'addDealer']);
+    Route::delete('groups/{group}/dealers/{dealer}',         [AdminDealerGroupController::class, 'removeDealer']);
 });
 
 // ── Dealer API key management (dealer admin, Sanctum auth) ────────────────
@@ -269,6 +281,13 @@ Route::middleware(['auth:sanctum', 'tenant', 'role:dealer_admin'])->group(functi
     Route::delete('dealer/api-keys/{keyId}', [DealerApiKeyController::class, 'destroy']);
     Route::get('dealer/sync-runs', [VehicleController::class, 'syncRuns']);
     Route::get('dealer/sync-runs/{runId}', [VehicleController::class, 'syncStatus']);
+});
+
+// ── Group admin — manage & report across multiple dealers ────────────────
+Route::middleware(['auth:sanctum', 'role:group_admin'])->prefix('group')->group(function () {
+    Route::get('',                     [GroupController::class, 'show']);
+    Route::patch('active-dealer',      [GroupController::class, 'setActiveDealer']);
+    Route::get('reports/summary',      [GroupController::class, 'reportSummary']);
 });
 
 // ── Inventory sync via API key (no Sanctum — server-to-server) ───────────

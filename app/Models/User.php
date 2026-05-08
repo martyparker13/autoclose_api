@@ -26,6 +26,7 @@ class User extends Authenticatable
         'phone',
         'avatar_url',
         'dealer_id',
+        'dealer_group_id',
     ];
 
     /** @var list<string> */
@@ -64,6 +65,11 @@ class User extends Authenticatable
         return $this->role === 'buyer';
     }
 
+    public function isGroupAdmin(): bool
+    {
+        return $this->role === 'group_admin';
+    }
+
     public function belongsToDealer(): bool
     {
         return in_array($this->role, ['dealer_admin', 'dealer_staff'], true);
@@ -75,6 +81,12 @@ class User extends Authenticatable
     public function dealer(): BelongsTo
     {
         return $this->belongsTo(Dealer::class);
+    }
+
+    /** @return BelongsTo<DealerGroup, User> */
+    public function dealerGroup(): BelongsTo
+    {
+        return $this->belongsTo(DealerGroup::class);
     }
 
     /** @return HasMany<Deal> */

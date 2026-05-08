@@ -69,6 +69,19 @@ class TenantMiddleware
                 ?? Dealer::where('slug', $slug)->first();
         }
 
+        // Group admins can switch active dealer context via X-Dealer-Id header.
+        // Only honour this header if the authenticated user is a group_admin and
+        // the requested dealer belongs to their group.
+        $dealerId = $request->header('X-Dealer-Id');
+        if ($dealerId && $request->user()?->isGroupAdmin()) {
+            $groupId = $request->user()->dealer_group_id;
+            if ($groupId) {
+                return Dealer::where('id', (int) $dealerId)
+                    ->where('dealer_group_id', $groupId)
+                    ->first();
+            }
+        }
+
         return null;
     }
 
