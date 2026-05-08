@@ -7,6 +7,7 @@ use App\Http\Requests\TradeIn\StoreTradeInRequest;
 use App\Http\Resources\TradeInAppraisalResource;
 use App\Models\Deal;
 use App\Models\TradeInAppraisal;
+use App\Services\Integrations\VehicleValuationService;
 use App\Services\TradeInService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -15,6 +16,7 @@ class TradeInAppraisalController extends BaseController
 {
     public function __construct(
         private readonly TradeInService $tradeIns,
+        private readonly VehicleValuationService $valuation,
     ) {}
 
     /**
@@ -59,6 +61,28 @@ class TradeInAppraisalController extends BaseController
         $updated = $this->tradeIns->respond($model, $dealModel, $request->validated());
 
         return $this->resourceResponse(new TradeInAppraisalResource($updated));
+    }
+
+    /**
+     * POST deals/{deal}/trade-in/valuate — buyer or dealer staff triggers automated valuation.
+     *
+     * Calls KBB / Manheim / algorithmic estimate and stores the result.
+     */
+    public function valuate(Request $request, int $deal): JsonResponse
+    {
+        $dealer    = app('current_dealer');
+        $dealModel = $this->resolveDeal($request, $dealer->id, $deal);
+
+        $appraisal = TradeInAppraisal::where('deal_id', $dealModel->id)->firstOrFail();
+
+        $result = $this->valuation->valuate($dealer, $appraisal);
+
+        return response()->json([
+            'data' => array_merge(
+                (new TradeInAppraisalResource($appraisal->fresh()))->resolve(),
+                ['valuation_source' => $result['source']],
+            ),
+        ]);
     }
 
     private function resolveDeal(Request $request, int $dealerId, int $dealId): Deal

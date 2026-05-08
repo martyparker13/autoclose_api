@@ -98,4 +98,49 @@ class ReportingController extends BaseController
 
         return response()->json(['data' => $data]);
     }
+
+    /**
+     * GET /dealer/reports/time-to-close?period=30d
+     *
+     * Average days from deal open to delivered.
+     */
+    public function timeToClose(Request $request): JsonResponse
+    {
+        $request->validate(['period' => ['nullable', 'in:7d,30d,90d,1y']]);
+
+        $dealer = app('current_dealer');
+        $data   = $this->reporting->timeToClose($dealer, $request->input('period', '30d'));
+
+        return response()->json(['data' => $data]);
+    }
+
+    /**
+     * GET /dealer/reports/fi-attach-rate?period=30d
+     *
+     * F&I product attach rate per product.
+     */
+    public function fiAttachRate(Request $request): JsonResponse
+    {
+        $request->validate(['period' => ['nullable', 'in:7d,30d,90d,1y']]);
+
+        $dealer = app('current_dealer');
+        $data   = $this->reporting->fiAttachRate($dealer, $request->input('period', '30d'));
+
+        return response()->json(['data' => $data]);
+    }
+
+    /**
+     * GET /dealer/reports/credit-approval?period=30d
+     *
+     * Credit approval rate overall and by lender.
+     */
+    public function creditApproval(Request $request): JsonResponse
+    {
+        $request->validate(['period' => ['nullable', 'in:7d,30d,90d,1y']]);
+
+        $dealer = app('current_dealer');
+        $data   = $this->reporting->creditApprovalRate($dealer, $request->input('period', '30d'));
+
+        return response()->json(['data' => $data]);
+    }
 }

@@ -2,8 +2,10 @@
 
 namespace App\Services;
 
+use App\Models\CreditApplication;
 use App\Models\Deal;
 use App\Models\Dealer;
+use App\Models\FiProduct;
 use App\Models\Vehicle;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -208,6 +210,148 @@ class ReportingService
             'pending'   => $rows['pending']   ?? 0,
             'sold'      => $rows['sold']      ?? 0,
             'total'     => array_sum($rows),
+        ];
+    }
+
+    /**
+     * Average days from deal created to delivered, for the given period.
+     *
+     * @return array{avg_days: float|null, sample_size: int, period: string}
+     */
+    public function timeToClose(Dealer $dealer, string $period = '30d'): array
+    {
+        [$start] = $this->periodDates($period);
+
+        $row = Deal::forDealer($dealer->id)
+            ->withoutTrashed()
+            ->where('status', 'delivered')
+            ->where('created_at', '>=', $start)
+            ->select(
+                DB::raw('AVG(TIMESTAMPDIFF(HOUR, created_at, updated_at)) / 24 as avg_days'),
+                DB::raw('COUNT(*) as sample_size'),
+            )
+            ->first();
+
+        return [
+            'avg_days'    => $row && $row->avg_days !== null ? round((float) $row->avg_days, 1) : null,
+            'sample_size' => $row ? (int) $row->sample_size : 0,
+            'period'      => $period,
+        ];
+    }
+
+    /**
+     * F&I product attach rate — how often each active product appears on a delivered deal.
+     *
+     * @return list<array{product_id: int, name: string, type: string, attach_count: int, attach_rate: float}>
+     */
+    public function fiAttachRate(Dealer $dealer, string $period = '30d'): array
+    {
+        [$start] = $this->periodDates($period);
+
+        $deliveredDeals = Deal::forDealer($dealer->id)
+            ->withoutTrashed()
+            ->where('status', 'delivered')
+            ->where('created_at', '>=', $start)
+            ->count();
+
+        if ($deliveredDeals === 0) {
+            return [];
+        }
+
+        $rows = FiProduct::forDealer($dealer->id)
+            ->select(
+                'fi_products.id',
+                'fi_products.name',
+                'fi_products.type',
+                DB::raw('COUNT(deal_fi_products.id) as attach_count'),
+            )
+            ->leftJoin('deal_fi_products', function ($join) use ($dealer, $start) {
+                $join->on('deal_fi_products.fi_product_id', '=', 'fi_products.id')
+                     ->whereExists(function ($q) use ($dealer, $start) {
+                         $q->from('deals')
+                           ->whereColumn('deals.id', 'deal_fi_products.deal_id')
+                           ->where('deals.dealer_id', $dealer->id)
+                           ->where('deals.status', 'delivered')
+                           ->where('deals.created_at', '>=', $start)
+                           ->whereNull('deals.deleted_at');
+                     });
+            })
+            ->groupBy('fi_products.id', 'fi_products.name', 'fi_products.type')
+            ->orderByDesc('attach_count')
+            ->get();
+
+        return $rows->map(fn ($r) => [
+            'product_id'  => $r->id,
+            'name'        => $r->name,
+            'type'        => $r->type,
+            'attach_count' => (int) $r->attach_count,
+            'attach_rate' => $deliveredDeals > 0
+                ? round(((int) $r->attach_count / $deliveredDeals) * 100, 1)
+                : 0.0,
+        ])->all();
+    }
+
+    /**
+     * Credit approval rate overall and broken down by lender (deal->lender field).
+     *
+     * @return array{
+     *   period: string,
+     *   total_apps: int,
+     *   approved: int,
+     *   declined: int,
+     *   approval_rate: float,
+     *   by_lender: list<array{lender: string, approved: int, declined: int, rate: float}>
+     * }
+     */
+    public function creditApprovalRate(Dealer $dealer, string $period = '30d'): array
+    {
+        [$start] = $this->periodDates($period);
+
+        $apps = CreditApplication::whereHas('deal', fn ($q) =>
+                $q->where('dealer_id', $dealer->id)
+                  ->where('created_at', '>=', $start)
+                  ->whereNull('deleted_at')
+            )
+            ->whereNotNull('decision')
+            ->select('decision', DB::raw('COUNT(*) as total'))
+            ->groupBy('decision')
+            ->pluck('total', 'decision')
+            ->toArray();
+
+        $approved = (int) ($apps['approved'] ?? 0);
+        $declined = (int) ($apps['declined'] ?? 0);
+        $total    = $approved + $declined;
+
+        // By lender — uses deals.lender field which is set when credit is approved
+        $byLender = Deal::forDealer($dealer->id)
+            ->withoutTrashed()
+            ->where('created_at', '>=', $start)
+            ->whereNotNull('lender')
+            ->select(
+                'lender',
+                DB::raw("SUM(CASE WHEN status NOT IN ('credit_declined','cancelled') THEN 1 ELSE 0 END) as approved"),
+                DB::raw("SUM(CASE WHEN status = 'credit_declined' THEN 1 ELSE 0 END) as declined"),
+            )
+            ->groupBy('lender')
+            ->orderByDesc('approved')
+            ->get()
+            ->map(fn ($r) => [
+                'lender'   => $r->lender,
+                'approved' => (int) $r->approved,
+                'declined' => (int) $r->declined,
+                'rate'     => ($r->approved + $r->declined) > 0
+                    ? round(((int) $r->approved / ($r->approved + $r->declined)) * 100, 1)
+                    : 0.0,
+            ])
+            ->all();
+
+        return [
+            'period'        => $period,
+            'total_apps'    => $total,
+            'approved'      => $approved,
+            'declined'      => $declined,
+            'approval_rate' => $total > 0 ? round(($approved / $total) * 100, 1) : 0.0,
+            'by_lender'     => $byLender,
         ];
     }
 

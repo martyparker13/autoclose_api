@@ -19,6 +19,7 @@ use App\Http\Controllers\Api\V1\FiProductController;
 use App\Http\Controllers\Api\V1\DealMessageController;
 use App\Http\Controllers\Api\V1\NotificationsController;
 use App\Http\Controllers\Api\V1\TradeInAppraisalController;
+use App\Http\Controllers\Api\V1\LenderRatesController;
 use App\Http\Controllers\Api\V1\ReportingController;
 use App\Http\Controllers\Api\V1\VehicleController;
 use App\Http\Controllers\Api\V1\VehicleFeatureController;
@@ -164,13 +165,24 @@ Route::middleware('auth:sanctum')->group(function () {
 
             // Reporting — dealer admin/staff
             Route::prefix('dealer/reports')->group(function () {
-                Route::get('summary',      [ReportingController::class, 'summary']);
-                Route::get('funnel',       [ReportingController::class, 'funnel']);
-                Route::get('trend',        [ReportingController::class, 'trend']);
-                Route::get('top-vehicles', [ReportingController::class, 'topVehicles']);
-                Route::get('top-staff',    [ReportingController::class, 'topStaff']);
-                Route::get('inventory',    [ReportingController::class, 'inventory']);
+                Route::get('summary',        [ReportingController::class, 'summary']);
+                Route::get('funnel',         [ReportingController::class, 'funnel']);
+                Route::get('trend',          [ReportingController::class, 'trend']);
+                Route::get('top-vehicles',   [ReportingController::class, 'topVehicles']);
+                Route::get('top-staff',      [ReportingController::class, 'topStaff']);
+                Route::get('inventory',      [ReportingController::class, 'inventory']);
+                Route::get('time-to-close',  [ReportingController::class, 'timeToClose']);
+                Route::get('fi-attach-rate', [ReportingController::class, 'fiAttachRate']);
+                Route::get('credit-approval',[ReportingController::class, 'creditApproval']);
             });
+
+            // Lender rate feed
+            Route::get('dealer/lender-rates',       [LenderRatesController::class, 'index']);
+            Route::get('dealer/lender-rate-bands',  [LenderRatesController::class, 'bands']);
+            Route::put('dealer/lender-rate-bands',  [LenderRatesController::class, 'updateBands']);
+
+            // Trade-in valuation (dealer staff can also trigger)
+            Route::post('dealer/deals/{deal}/trade-in/valuate', [TradeInAppraisalController::class, 'valuate']);
         });
 
         // ── F&I Products ───────────────────────────────────────────────────────
@@ -192,9 +204,10 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::post('deals/{deal}/credit-application',  [CreditApplicationController::class, 'store']);
             Route::get('deals/{deal}/credit-application',   [CreditApplicationController::class, 'show']);
 
-            // Trade-in appraisal
-            Route::post('deals/{deal}/trade-in',   [TradeInAppraisalController::class, 'store']);
-            Route::get('deals/{deal}/trade-in',    [TradeInAppraisalController::class, 'show']);
+            // Trade-in appraisal + automated valuation
+            Route::post('deals/{deal}/trade-in',          [TradeInAppraisalController::class, 'store']);
+            Route::get('deals/{deal}/trade-in',           [TradeInAppraisalController::class, 'show']);
+            Route::post('deals/{deal}/trade-in/valuate',  [TradeInAppraisalController::class, 'valuate']);
 
             // Delivery appointment
             Route::post('deals/{deal}/delivery',   [DeliveryAppointmentController::class, 'store']);
