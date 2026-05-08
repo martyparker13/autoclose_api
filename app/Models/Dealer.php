@@ -35,19 +35,25 @@ class Dealer extends Model
         'is_active',
         'feature_flags',
         'google_review_url',
+        'dealertrack_credentials',
+        'routeone_credentials',
     ];
 
     /** @var list<string> */
     protected $hidden = [
         'dms_credentials',
+        'dealertrack_credentials',
+        'routeone_credentials',
         'stripe_customer_id',
     ];
 
     /** @var array<string, string> */
     protected $casts = [
-        'dms_credentials' => 'encrypted:array',
-        'feature_flags'   => 'array',
-        'is_active'       => 'boolean',
+        'dms_credentials'          => 'encrypted:array',
+        'dealertrack_credentials'  => 'encrypted:array',
+        'routeone_credentials'     => 'encrypted:array',
+        'feature_flags'            => 'array',
+        'is_active'                => 'boolean',
     ];
 
     // ── Relationships ────────────────────────────────────────────────────

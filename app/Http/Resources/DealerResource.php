@@ -33,6 +33,15 @@ class DealerResource extends JsonResource
             'subscription_status' => $this->subscription_status,
             'is_active'           => $this->is_active,
             'feature_flags'       => $this->feature_flags ?? [],
+            'google_review_url'   => $this->google_review_url,
+            'integrations'        => [
+                'dealertrack' => [
+                    'connected' => ! empty($this->dealertrack_credentials),
+                ],
+                'routeone' => [
+                    'connected' => ! empty($this->routeone_credentials),
+                ],
+            ],
             'deleted_at'          => $this->deleted_at?->toIso8601String(),
             'created_at'          => $this->created_at->toIso8601String(),
             'updated_at'          => $this->updated_at->toIso8601String(),

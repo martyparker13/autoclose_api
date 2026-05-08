@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\V1\Admin\DealerController as AdminDealerController;
+use App\Http\Controllers\Api\V1\Admin\DealerIntegrationController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\CreditApplicationController;
 use App\Http\Controllers\Api\V1\DealController;
@@ -94,6 +95,13 @@ Route::middleware('auth:sanctum')->group(function () {
             // Branding — dealer admin can update their own dealership's branding
             Route::patch('dealer/settings/branding',    [AdminDealerController::class, 'updateBranding']);
             Route::post('dealer/settings/logo',         [AdminDealerController::class, 'uploadLogo']);
+
+            // Integrations — DealerTrack & RouteOne credential management (dealer admin only)
+            Route::middleware('role:dealer_admin')->group(function () {
+                Route::get('dealer/settings/integrations/{platform}',    [DealerIntegrationController::class, 'show']);
+                Route::patch('dealer/settings/integrations/{platform}',  [DealerIntegrationController::class, 'update']);
+                Route::delete('dealer/settings/integrations/{platform}', [DealerIntegrationController::class, 'disconnect']);
+            });
 
             Route::get('dealer/deals',                               [DealController::class, 'index']);
             Route::get('dealer/deals/{deal}',                        [DealController::class, 'show']);
