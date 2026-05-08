@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Api\V1\Admin;
 
 use App\Http\Controllers\Api\V1\BaseController;
 use App\Http\Resources\DealerResource;
+use App\Jobs\SyncDealerTrackInventoryJob;
+use App\Models\DealerSyncRun;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -32,13 +34,32 @@ class DealerIntegrationController extends BaseController
         $column = self::CREDENTIAL_COLUMN[$platform];
         $creds  = $dealer->{$column};
 
-        return response()->json([
-            'data' => [
-                'platform'  => $platform,
-                'connected' => ! empty($creds),
-                'hints'     => $this->maskCredentials($platform, $creds),
-            ],
-        ]);
+        $data = [
+            'platform'  => $platform,
+            'connected' => ! empty($creds),
+            'hints'     => $this->maskCredentials($platform, $creds),
+        ];
+
+        // Include last inventory sync run info for DealerTrack
+        if ($platform === 'dealertrack') {
+            $lastSync = DealerSyncRun::where('dealer_id', $dealer->id)
+                ->where('source', 'dealertrack')
+                ->orderByDesc('created_at')
+                ->first(['public_id', 'status', 'created', 'updated', 'archived', 'error_count', 'created_at', 'completed_at']);
+
+            $data['last_inventory_sync'] = $lastSync ? [
+                'sync_run_id'  => $lastSync->public_id,
+                'status'       => $lastSync->status,
+                'created'      => $lastSync->created,
+                'updated'      => $lastSync->updated,
+                'archived'     => $lastSync->archived,
+                'error_count'  => $lastSync->error_count,
+                'started_at'   => $lastSync->created_at?->toIso8601String(),
+                'completed_at' => $lastSync->completed_at?->toIso8601String(),
+            ] : null;
+        }
+
+        return response()->json(['data' => $data]);
     }
 
     /**
@@ -99,6 +120,39 @@ class DealerIntegrationController extends BaseController
                 'hints'     => null,
             ],
         ]);
+    }
+
+    // ── Private helpers ──────────────────────────────────────────────────────
+
+    /**
+     * POST dealer/settings/integrations/{platform}/sync
+     *
+     * Manually trigger an inventory pull for the given platform.
+     * Currently only supported for 'dealertrack'.
+     */
+    public function triggerSync(string $platform): JsonResponse
+    {
+        $this->validatePlatform($platform);
+
+        if ($platform !== 'dealertrack') {
+            return response()->json(['message' => "Inventory sync is not supported for {$platform}."], 422);
+        }
+
+        $dealer = app('current_dealer');
+
+        if (empty($dealer->dealertrack_credentials)) {
+            return response()->json(['message' => 'DealerTrack is not connected. Please save credentials first.'], 422);
+        }
+
+        SyncDealerTrackInventoryJob::dispatch($dealer->id);
+
+        return response()->json([
+            'data' => [
+                'queued'   => true,
+                'platform' => $platform,
+                'message'  => 'Inventory sync has been queued.',
+            ],
+        ], 202);
     }
 
     // ── Private helpers ──────────────────────────────────────────────────────

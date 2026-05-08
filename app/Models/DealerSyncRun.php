@@ -10,6 +10,7 @@ class DealerSyncRun extends Model
     protected $fillable = [
         'public_id',
         'dealer_id',
+        'source',
         'status',
         'archive_missing',
         'total_records',

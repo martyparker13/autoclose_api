@@ -100,9 +100,10 @@ Route::middleware('auth:sanctum')->group(function () {
 
             // Integrations — DealerTrack & RouteOne credential management (dealer admin only)
             Route::middleware('role:dealer_admin')->group(function () {
-                Route::get('dealer/settings/integrations/{platform}',    [DealerIntegrationController::class, 'show']);
-                Route::patch('dealer/settings/integrations/{platform}',  [DealerIntegrationController::class, 'update']);
-                Route::delete('dealer/settings/integrations/{platform}', [DealerIntegrationController::class, 'disconnect']);
+                Route::get('dealer/settings/integrations/{platform}',          [DealerIntegrationController::class, 'show']);
+                Route::patch('dealer/settings/integrations/{platform}',         [DealerIntegrationController::class, 'update']);
+                Route::delete('dealer/settings/integrations/{platform}',        [DealerIntegrationController::class, 'disconnect']);
+                Route::post('dealer/settings/integrations/{platform}/sync',     [DealerIntegrationController::class, 'triggerSync']);
             });
 
             Route::get('dealer/deals',                               [DealController::class, 'index']);

@@ -20,10 +20,12 @@ use Illuminate\Support\Facades\Log;
  */
 class DealerTrackService
 {
-    private const TOKEN_URL  = 'https://auth.coxautoinc.com/oauth2/token';
-    private const API_BASE   = 'https://api.coxautoinc.com/dealertrack/v1';
-    private const SCOPE      = 'dealertrack.creditapplication.write';
-    private const TIMEOUT    = 15;
+    private const TOKEN_URL       = 'https://auth.coxautoinc.com/oauth2/token';
+    private const API_BASE        = 'https://api.coxautoinc.com/dealertrack/v1';
+    private const SCOPE           = 'dealertrack.creditapplication.write';
+    private const INVENTORY_SCOPE = 'dealertrack.inventory.read';
+    private const TIMEOUT         = 15;
+    private const INVENTORY_PAGE_SIZE = 500;
 
     /**
      * Push a credit application to DealerTrack.
@@ -88,7 +90,7 @@ class DealerTrackService
      *
      * @throws \RuntimeException
      */
-    private function fetchToken(string $clientId, string $clientSecret): string
+    private function fetchToken(string $clientId, string $clientSecret, string $scope = self::SCOPE): string
     {
         $response = Http::timeout(self::TIMEOUT)
             ->asForm()
@@ -96,7 +98,7 @@ class DealerTrackService
                 'grant_type'    => 'client_credentials',
                 'client_id'     => $clientId,
                 'client_secret' => $clientSecret,
-                'scope'         => self::SCOPE,
+                'scope'         => $scope,
             ]);
 
         if (! $response->successful()) {
@@ -110,6 +112,120 @@ class DealerTrackService
         }
 
         return $token;
+    }
+
+    // ── Inventory sync ────────────────────────────────────────────────────────
+
+    /**
+     * Fetch all inventory pages from DealerTrack and return a flat array
+     * formatted for InventoryService::syncFromPayload().
+     *
+     * @return list<array<string, mixed>>
+     * @throws \RuntimeException on authentication or API failure
+     */
+    public function fetchInventory(Dealer $dealer): array
+    {
+        $creds = $dealer->dealertrack_credentials;
+
+        if (empty($creds)) {
+            throw new \RuntimeException('No DealerTrack credentials configured for dealer '.$dealer->id);
+        }
+
+        $token    = $this->fetchToken($creds['client_id'], $creds['client_secret'], self::INVENTORY_SCOPE);
+        $vehicles = [];
+        $page     = 1;
+
+        do {
+            $response = Http::timeout(self::TIMEOUT)
+                ->withToken($token)
+                ->get(self::API_BASE.'/inventory', [
+                    'dealerId' => $creds['dealer_id'],
+                    'pageSize' => self::INVENTORY_PAGE_SIZE,
+                    'page'     => $page,
+                ]);
+
+            if (! $response->successful()) {
+                throw new \RuntimeException(
+                    'DealerTrack inventory API returned '.$response->status().' on page '.$page
+                );
+            }
+
+            $body       = $response->json();
+            $items      = $body['vehicles'] ?? $body['data'] ?? [];
+            $totalCount = (int) ($body['totalCount'] ?? $body['total'] ?? count($items));
+
+            foreach ($items as $item) {
+                $mapped = $this->mapInventoryItem($item);
+                if ($mapped !== null) {
+                    $vehicles[] = $mapped;
+                }
+            }
+
+            $page++;
+        } while (count($vehicles) < $totalCount && ! empty($items));
+
+        Log::info('DealerTrack: inventory fetched', [
+            'dealer_id' => $dealer->id,
+            'count'     => count($vehicles),
+        ]);
+
+        return $vehicles;
+    }
+
+    /**
+     * Map a DealerTrack inventory item to AutoClose's sync payload shape.
+     *
+     * Returns null if the item is missing required identifiers.
+     *
+     * @param  array<string, mixed>  $item
+     * @return array<string, mixed>|null
+     */
+    private function mapInventoryItem(array $item): ?array
+    {
+        $vin         = strtoupper(trim((string) ($item['vin'] ?? '')));
+        $stockNumber = trim((string) ($item['stockNumber'] ?? $item['stock_number'] ?? ''));
+
+        if ($vin === '' && $stockNumber === '') {
+            return null;
+        }
+
+        $priceRaw    = $item['internetPrice'] ?? $item['listPrice'] ?? $item['price'] ?? null;
+        $msrpRaw     = $item['msrp'] ?? null;
+        $mileageRaw  = $item['mileage'] ?? $item['odometer'] ?? 0;
+
+        // DealerTrack returns prices as decimals (dollars), AutoClose stores cents
+        $toPrice = fn (?float $v): ?int => $v !== null ? (int) round($v * 100) : null;
+
+        $condition = strtolower($item['type'] ?? $item['condition'] ?? 'used');
+        if (! in_array($condition, ['new', 'used', 'certified'], true)) {
+            $condition = 'used';
+        }
+
+        return array_filter([
+            'vin'              => $vin ?: null,
+            'stock_number'     => $stockNumber ?: null,
+            'year'             => isset($item['year']) ? (int) $item['year'] : null,
+            'make'             => $item['make'] ?? null,
+            'model'            => $item['model'] ?? null,
+            'trim'             => $item['trim'] ?? $item['trimLevel'] ?? null,
+            'body_style'       => $item['bodyStyle'] ?? $item['body_style'] ?? null,
+            'exterior_color'   => $item['exteriorColor'] ?? $item['extColor'] ?? null,
+            'interior_color'   => $item['interiorColor'] ?? $item['intColor'] ?? null,
+            'mileage'          => (int) $mileageRaw,
+            'condition'        => $condition,
+            'price'            => $toPrice((float) ($priceRaw ?? 0)) ?: null,
+            'msrp'             => $toPrice((float) ($msrpRaw ?? 0)) ?: null,
+            'internet_price'   => $toPrice((float) ($item['internetPrice'] ?? 0)) ?: null,
+            'transmission'     => $item['transmission'] ?? null,
+            'engine'           => $item['engine'] ?? $item['engineDescription'] ?? null,
+            'drivetrain'       => $item['drivetrain'] ?? $item['driveTrain'] ?? null,
+            'fuel_type'        => $item['fuelType'] ?? $item['fuel_type'] ?? null,
+            'doors'            => isset($item['doors']) ? (int) $item['doors'] : null,
+            'cylinders'        => isset($item['cylinders']) ? (int) $item['cylinders'] : null,
+            'description'      => $item['description'] ?? null,
+            'carfax_url'       => $item['carfaxUrl'] ?? $item['carfax_url'] ?? null,
+            'status'           => 'available',
+        ], fn ($v) => $v !== null && $v !== '');
     }
 
     /**
