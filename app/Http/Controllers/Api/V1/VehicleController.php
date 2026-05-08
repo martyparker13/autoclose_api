@@ -8,12 +8,14 @@ use App\Http\Requests\Vehicle\ImportVehiclesRequest;
 use App\Http\Requests\Vehicle\StoreVehicleRequest;
 use App\Http\Requests\Vehicle\UpdateVehicleRequest;
 use App\Http\Resources\VehicleResource;
+use App\Models\DealerSyncRun;
 use App\Models\Vehicle;
 use App\Repositories\VehicleRepositoryInterface;
 use App\Services\InventoryService;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 
 class VehicleController extends BaseController
 {
@@ -145,10 +147,19 @@ class VehicleController extends BaseController
 
         $queueMode = $request->boolean('queue');
         if ($queueMode) {
+            $syncRun = DealerSyncRun::create([
+                'public_id' => (string) Str::uuid(),
+                'dealer_id' => $dealer->id,
+                'status' => 'queued',
+                'archive_missing' => $request->boolean('archive_missing'),
+                'total_records' => count($payload),
+                'chunk_size' => self::SYNC_CHUNK_SIZE,
+            ]);
+
             $jobs = [];
 
             foreach (array_chunk($payload, self::SYNC_CHUNK_SIZE) as $chunk) {
-                $jobs[] = new SyncDealerVehiclesChunkJob($dealer->id, $chunk);
+                $jobs[] = new SyncDealerVehiclesChunkJob($dealer->id, $syncRun->id, $chunk);
             }
 
             if ($request->boolean('archive_missing')) {
@@ -162,14 +173,19 @@ class VehicleController extends BaseController
                     $payload,
                 ))));
 
-                $jobs[] = new ArchiveMissingDealerVehiclesJob($dealer->id, $incomingVins, $incomingStocks);
+                $jobs[] = new ArchiveMissingDealerVehiclesJob($dealer->id, $syncRun->id, $incomingVins, $incomingStocks);
             }
+
+            $syncRun->update(['total_jobs' => count($jobs)]);
 
             Bus::chain($jobs)->dispatch();
 
             return response()->json([
                 'data' => [
                     'queued' => true,
+                    'sync_run_id' => $syncRun->public_id,
+                    'status' => $syncRun->status,
+                    'status_path' => "/api/v1/vehicles/sync-runs/{$syncRun->public_id}",
                     'job_count' => count($jobs),
                     'chunk_size' => self::SYNC_CHUNK_SIZE,
                     'records_received' => count($payload),
@@ -195,6 +211,43 @@ class VehicleController extends BaseController
                 'archived' => $archived,
             ],
             'errors' => $syncResult['errors'],
+        ]);
+    }
+
+    /**
+     * Return status/progress for an asynchronous DMS sync run.
+     */
+    public function syncStatus(string $runId): JsonResponse
+    {
+        $dealer = app('current_dealer');
+
+        $run = DealerSyncRun::where('public_id', $runId)
+            ->where('dealer_id', $dealer->id)
+            ->firstOrFail();
+
+        return response()->json([
+            'data' => [
+                'sync_run_id' => $run->public_id,
+                'status' => $run->status,
+                'archive_missing' => $run->archive_missing,
+                'total_records' => $run->total_records,
+                'chunk_size' => $run->chunk_size,
+                'total_jobs' => $run->total_jobs,
+                'processed_jobs' => $run->processed_jobs,
+                'progress_percent' => $run->total_jobs > 0
+                    ? (int) floor(($run->processed_jobs / $run->total_jobs) * 100)
+                    : 0,
+                'created' => $run->created,
+                'updated' => $run->updated,
+                'skipped' => $run->skipped,
+                'archived' => $run->archived,
+                'error_count' => $run->error_count,
+                'errors' => $run->errors ?? [],
+                'started_at' => $run->started_at,
+                'completed_at' => $run->completed_at,
+                'created_at' => $run->created_at,
+                'updated_at' => $run->updated_at,
+            ],
         ]);
     }
 }

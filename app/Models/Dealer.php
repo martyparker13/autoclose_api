@@ -75,6 +75,12 @@ class Dealer extends Model
         return $this->hasMany(FiProduct::class);
     }
 
+    /** @return HasMany<DealerSyncRun> */
+    public function syncRuns(): HasMany
+    {
+        return $this->hasMany(DealerSyncRun::class);
+    }
+
     // ── Helpers ──────────────────────────────────────────────────────────
 
     /**

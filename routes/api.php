@@ -201,4 +201,5 @@ Route::middleware(['auth:sanctum', 'tenant', 'role:dealer_admin'])->group(functi
 // ── Inventory sync via API key (no Sanctum — server-to-server) ───────────
 Route::middleware('auth.api_key')->group(function () {
     Route::post('vehicles/sync', [VehicleController::class, 'sync']);
+    Route::get('vehicles/sync-runs/{runId}', [VehicleController::class, 'syncStatus']);
 });
