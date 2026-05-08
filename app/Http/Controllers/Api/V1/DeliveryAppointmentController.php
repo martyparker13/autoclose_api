@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Requests\Delivery\StoreDeliveryAppointmentRequest;
 use App\Http\Requests\Delivery\UpdateDeliveryAppointmentRequest;
 use App\Http\Resources\DeliveryAppointmentResource;
+use App\Jobs\SendDeliveryReminderJob;
 use App\Models\Deal;
 use App\Models\DeliveryAppointment;
 use Illuminate\Http\JsonResponse;
@@ -44,6 +45,8 @@ class DeliveryAppointmentController extends BaseController
             $dealModel->update(['status' => 'awaiting_delivery']);
         }
 
+        $this->dispatchReminders($appointment);
+
         return $this->resourceResponse(new DeliveryAppointmentResource($appointment), 201);
     }
 
@@ -72,6 +75,13 @@ class DeliveryAppointmentController extends BaseController
 
         $model->update($request->validated());
 
+        // Re-dispatch reminders if the scheduled time changed or status returned to scheduled
+        if ($model->wasChanged('scheduled_at') || $model->wasChanged('status')) {
+            if ($model->status === 'scheduled') {
+                $this->dispatchReminders($model);
+            }
+        }
+
         // If completed, mark the deal as delivered
         if (($request->validated()['status'] ?? null) === 'completed') {
             $dealModel->update(['status' => 'delivered']);
@@ -90,5 +100,28 @@ class DeliveryAppointmentController extends BaseController
         }
 
         return Deal::where('dealer_id', $dealerId)->findOrFail($dealId);
+    }
+
+    /**
+     * Queue 24-hour and 1-hour SMS reminders for the appointment.
+     */
+    private function dispatchReminders(DeliveryAppointment $appointment): void
+    {
+        if (! $appointment->scheduled_at) {
+            return;
+        }
+
+        $twentyFourHours = $appointment->scheduled_at->copy()->subHours(24);
+        $oneHour         = $appointment->scheduled_at->copy()->subHour();
+
+        if ($twentyFourHours->isFuture()) {
+            SendDeliveryReminderJob::dispatch($appointment->id, '24 hours')
+                ->delay($twentyFourHours);
+        }
+
+        if ($oneHour->isFuture()) {
+            SendDeliveryReminderJob::dispatch($appointment->id, '1 hour')
+                ->delay($oneHour);
+        }
     }
 }

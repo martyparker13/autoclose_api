@@ -20,6 +20,7 @@ use App\Http\Controllers\Api\V1\DealMessageController;
 use App\Http\Controllers\Api\V1\NotificationsController;
 use App\Http\Controllers\Api\V1\TradeInAppraisalController;
 use App\Http\Controllers\Api\V1\LenderRatesController;
+use App\Http\Controllers\Api\V1\PreQualController;
 use App\Http\Controllers\Api\V1\ReportingController;
 use App\Http\Controllers\Api\V1\VehicleController;
 use App\Http\Controllers\Api\V1\VehicleFeatureController;
@@ -214,8 +215,15 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::get('deals/{deal}/delivery',    [DeliveryAppointmentController::class, 'show']);
 
             // Documents (read-only for buyers)
-            Route::get('deals/{deal}/documents',           [DealDocumentController::class, 'index']);
-            Route::get('deals/{deal}/documents/{document}',[DealDocumentController::class, 'show']);
+            Route::get('deals/{deal}/documents',                        [DealDocumentController::class, 'index']);
+            Route::get('deals/{deal}/documents/{document}',             [DealDocumentController::class, 'show']);
+            Route::get('deals/{deal}/documents/{document}/download',    [DealDocumentController::class, 'download']);
+
+            // Deal summary (post-close jacket)
+            Route::get('deals/{deal}/summary', [DealController::class, 'summary']);
+
+            // Soft credit pre-qualification
+            Route::post('deals/{deal}/pre-qualify', [PreQualController::class, 'store']);
 
             // Deposit
             Route::post('deals/{deal}/deposit',         [DepositController::class, 'create']);

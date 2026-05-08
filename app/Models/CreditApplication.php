@@ -31,6 +31,7 @@ class CreditApplication extends Model
         'submitted_at',
         'decided_at',
         'integration_pushes',
+        'pre_qual_result',
     ];
 
     /** @var list<string> */
@@ -51,6 +52,7 @@ class CreditApplication extends Model
         'submitted_at'        => 'datetime',
         'decided_at'          => 'datetime',
         'integration_pushes'  => 'array',
+        'pre_qual_result'     => 'array',
     ];
 
     /** @return BelongsTo<Deal, CreditApplication> */

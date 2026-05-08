@@ -60,8 +60,89 @@ class DealController extends BaseController
     }
 
     /**
-     * Open a new deal (buyer initiates purchase).
+     * Return a structured deal jacket / summary for post-close review.
+     *
+     * GET /deals/{deal}/summary  (buyer)
      */
+    public function summary(Request $request, int $deal): JsonResponse
+    {
+        /** @var \App\Models\User $user */
+        $user = $request->user();
+
+        if ($user->isBuyer()) {
+            $model = $this->service->getForBuyer($deal, $user);
+        } else {
+            $dealer = app('current_dealer');
+            $model  = $this->service->getForDealer($deal, $dealer);
+        }
+
+        $this->authorize('view', $model);
+
+        if (in_array($model->status, ['draft', 'cancelled'], true)) {
+            return response()->json(['message' => 'Deal summary is not yet available.'], 422);
+        }
+
+        $model->load([
+            'vehicle',
+            'buyer',
+            'dealFiProducts.fiProduct',
+            'documents',
+            'creditApplication',
+            'deliveryAppointment',
+            'tradeInAppraisal',
+        ]);
+
+        return response()->json([
+            'data' => [
+                'deal_id'     => $model->id,
+                'status'      => $model->status,
+                'vehicle'     => $model->vehicle ? [
+                    'year'   => $model->vehicle->year,
+                    'make'   => $model->vehicle->make,
+                    'model'  => $model->vehicle->model,
+                    'trim'   => $model->vehicle->trim,
+                    'vin'    => $model->vehicle->vin,
+                    'stock'  => $model->vehicle->stock_number,
+                    'color'  => $model->vehicle->exterior_color,
+                ] : null,
+                'finance'     => [
+                    'sale_price'      => $model->sale_price,
+                    'down_payment'    => $model->down_payment,
+                    'trade_in_value'  => $model->trade_in_value,
+                    'finance_amount'  => $model->finance_amount,
+                    'apr'             => $model->apr,
+                    'term_months'     => $model->term_months,
+                    'monthly_payment' => $model->monthly_payment,
+                    'lender'          => $model->lender,
+                ],
+                'fi_products' => $model->dealFiProducts->map(fn ($fp) => [
+                    'name'  => $fp->fiProduct?->name ?? "Product #{$fp->fi_product_id}",
+                    'type'  => $fp->fiProduct?->type,
+                    'price' => $fp->price,
+                ]),
+                'documents'   => $model->documents->map(fn ($d) => [
+                    'id'             => $d->id,
+                    'type'           => $d->type,
+                    'docusign_status'=> $d->docusign_status,
+                    'signed_at'      => $d->signed_at?->toIso8601String(),
+                ]),
+                'delivery'    => $model->deliveryAppointment ? [
+                    'type'         => $model->deliveryAppointment->type,
+                    'scheduled_at' => $model->deliveryAppointment->scheduled_at?->toIso8601String(),
+                    'address'      => $model->deliveryAppointment->address,
+                    'status'       => $model->deliveryAppointment->status,
+                ] : null,
+                'credit'      => $model->creditApplication ? [
+                    'decision'       => $model->creditApplication->decision,
+                    'approved_amount'=> $model->creditApplication->approved_amount,
+                    'approved_apr'   => $model->creditApplication->approved_apr,
+                    'approved_term'  => $model->creditApplication->approved_term,
+                ] : null,
+                'created_at'  => $model->created_at->toIso8601String(),
+            ],
+        ]);
+    }
+
     public function store(StoreDealRequest $request): JsonResponse
     {
         $this->authorize('create', Deal::class);

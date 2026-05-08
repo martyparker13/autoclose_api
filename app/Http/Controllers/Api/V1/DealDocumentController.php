@@ -7,6 +7,7 @@ use App\Models\Deal;
 use App\Models\DealDocument;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 
 class DealDocumentController extends BaseController
 {
@@ -60,6 +61,28 @@ class DealDocumentController extends BaseController
         ]);
 
         return $this->resourceResponse(new DealDocumentResource($doc), 201);
+    }
+
+    /**
+     * Generate a temporary presigned download URL for a document (buyer or dealer staff).
+     *
+     * GET /deals/{deal}/documents/{document}/download
+     */
+    public function download(Request $request, int $deal, int $document): JsonResponse
+    {
+        $dealer    = app('current_dealer');
+        $dealModel = $this->resolveDeal($request, $dealer->id, $deal);
+        $doc       = DealDocument::where('deal_id', $dealModel->id)->findOrFail($document);
+
+        if (! $doc->s3_path) {
+            return response()->json(['message' => 'Document file not available.'], 404);
+        }
+
+        /** @var \Illuminate\Filesystem\FilesystemAdapter $s3 */
+        $s3  = Storage::disk('s3');
+        $url = $s3->temporaryUrl($doc->s3_path, now()->addMinutes(15));
+
+        return response()->json(['data' => ['url' => $url, 'expires_in' => 900]]);
     }
 
     private function resolveDeal(Request $request, int $dealerId, int $dealId): Deal
