@@ -13,6 +13,9 @@ class ActivityLog extends Model
     /** @var bool */
     public $timestamps = true;
 
+    /** Audit logs are immutable — disable updated_at. */
+    const UPDATED_AT = null;
+
     /** @var list<string> */
     protected $fillable = [
         'dealer_id',

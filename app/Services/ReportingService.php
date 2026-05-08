@@ -6,6 +6,7 @@ use App\Models\CreditApplication;
 use App\Models\Deal;
 use App\Models\Dealer;
 use App\Models\FiProduct;
+use App\Models\ActivityLog;
 use App\Models\Vehicle;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -96,12 +97,13 @@ class ReportingService
     public function monthlyTrend(Dealer $dealer): array
     {
         $start = now()->subMonths(11)->startOfMonth();
+        $monthExpr = $this->monthBucketExpression();
 
         $rows = Deal::forDealer($dealer->id)
             ->withoutTrashed()
             ->where('created_at', '>=', $start)
             ->select(
-                DB::raw("DATE_FORMAT(created_at, '%Y-%m') as month"),
+                DB::raw("{$monthExpr} as month"),
                 DB::raw('COUNT(*) as deals'),
                 DB::raw("SUM(CASE WHEN status = 'delivered' THEN sale_price ELSE 0 END) as revenue_cents"),
                 DB::raw("SUM(CASE WHEN status = 'delivered' THEN total_fi_income ELSE 0 END) as fi_income_cents"),
@@ -355,6 +357,178 @@ class ReportingService
         ];
     }
 
+    /**
+     * Platform-wide KPI summary for the super admin dashboard.
+     *
+     * @return array<string, mixed>
+     */
+    public function summaryGlobal(string $period = '30d'): array
+    {
+        [$start, $prevStart, $prevEnd] = $this->periodDates($period);
+
+        $base = Deal::query()->withoutTrashed();
+
+        $current = (clone $base)->where('created_at', '>=', $start);
+        $prev    = (clone $base)->whereBetween('created_at', [$prevStart, $prevEnd]);
+
+        $totalDeals      = (clone $current)->count();
+        $prevTotalDeals  = (clone $prev)->count();
+
+        $closedDeals     = (clone $current)->where('status', 'delivered')->count();
+        $prevClosedDeals = (clone $prev)->where('status', 'delivered')->count();
+
+        $revenue         = (clone $current)->where('status', 'delivered')->sum('sale_price');
+        $prevRevenue     = (clone $prev)->where('status', 'delivered')->sum('sale_price');
+
+        $fiIncome        = (clone $current)->where('status', 'delivered')->sum('total_fi_income');
+        $prevFiIncome    = (clone $prev)->where('status', 'delivered')->sum('total_fi_income');
+
+        $pendingCredit   = (clone $base)->where('status', 'credit_submitted')->count();
+        $avgSalePrice    = (clone $current)->where('status', 'delivered')->avg('sale_price') ?? 0;
+
+        $activeDealers = Dealer::query()
+            ->where('is_active', true)
+            ->whereNull('deleted_at')
+            ->count();
+
+        $auditEvents24h = ActivityLog::query()
+            ->where('created_at', '>=', now()->subDay())
+            ->count();
+
+        return [
+            'period'                => $period,
+            'period_start'          => $start->toDateString(),
+            'total_deals'           => $totalDeals,
+            'total_deals_delta'     => $this->delta($totalDeals, $prevTotalDeals),
+            'closed_deals'          => $closedDeals,
+            'closed_deals_delta'    => $this->delta($closedDeals, $prevClosedDeals),
+            'revenue_cents'         => (int) $revenue,
+            'revenue_delta'         => $this->delta((int) $revenue, (int) $prevRevenue),
+            'fi_income_cents'       => (int) $fiIncome,
+            'fi_income_delta'       => $this->delta((int) $fiIncome, (int) $prevFiIncome),
+            'pending_credit'        => $pendingCredit,
+            'avg_sale_price_cents'  => (int) $avgSalePrice,
+            'active_dealers'        => $activeDealers,
+            'audit_events_24h'      => $auditEvents24h,
+        ];
+    }
+
+    /**
+     * Platform-wide monthly trend for trailing 12 months.
+     *
+     * @return list<array{month: string, deals: int, revenue_cents: int, fi_income_cents: int}>
+     */
+    public function monthlyTrendGlobal(): array
+    {
+        $start = now()->subMonths(11)->startOfMonth();
+        $monthExpr = $this->monthBucketExpression();
+
+        $rows = Deal::query()
+            ->withoutTrashed()
+            ->where('created_at', '>=', $start)
+            ->select(
+                DB::raw("{$monthExpr} as month"),
+                DB::raw('COUNT(*) as deals'),
+                DB::raw("SUM(CASE WHEN status = 'delivered' THEN sale_price ELSE 0 END) as revenue_cents"),
+                DB::raw("SUM(CASE WHEN status = 'delivered' THEN total_fi_income ELSE 0 END) as fi_income_cents"),
+            )
+            ->groupBy('month')
+            ->orderBy('month')
+            ->get()
+            ->keyBy('month');
+
+        $months = [];
+        for ($i = 11; $i >= 0; $i--) {
+            $key = now()->subMonths($i)->format('Y-m');
+            $row = $rows->get($key);
+            $months[] = [
+                'month'           => $key,
+                'deals'           => $row ? (int) $row->deals : 0,
+                'revenue_cents'   => $row ? (int) $row->revenue_cents : 0,
+                'fi_income_cents' => $row ? (int) $row->fi_income_cents : 0,
+            ];
+        }
+
+        return $months;
+    }
+
+    /**
+     * Top dealers by closed deals and revenue.
+     *
+     * @return list<array{dealer_id: int, dealer_name: string, deals: int, revenue_cents: int, close_rate: float}>
+     */
+    public function topDealers(int $limit = 10): array
+    {
+        return Deal::query()
+            ->withoutTrashed()
+            ->join('dealers', 'dealers.id', '=', 'deals.dealer_id')
+            ->select(
+                'deals.dealer_id',
+                'dealers.name as dealer_name',
+                DB::raw("SUM(CASE WHEN deals.status = 'delivered' THEN 1 ELSE 0 END) as deals"),
+                DB::raw("SUM(CASE WHEN deals.status = 'delivered' THEN deals.sale_price ELSE 0 END) as revenue_cents"),
+                DB::raw('COUNT(*) as total_deals')
+            )
+            ->groupBy('deals.dealer_id', 'dealers.name')
+            ->orderByDesc('deals')
+            ->limit($limit)
+            ->get()
+            ->map(fn ($r) => [
+                'dealer_id'     => (int) $r->dealer_id,
+                'dealer_name'   => $r->dealer_name,
+                'deals'         => (int) $r->deals,
+                'revenue_cents' => (int) $r->revenue_cents,
+                'close_rate'    => (int) $r->total_deals > 0
+                    ? round(((int) $r->deals / (int) $r->total_deals) * 100, 1)
+                    : 0.0,
+            ])
+            ->all();
+    }
+
+    /**
+     * Daily audit activity counts for the trailing N days.
+     *
+     * @return list<array{date: string, total: int, sensitive: int}>
+     */
+    public function auditActivity(int $days = 14): array
+    {
+        $start = now()->subDays($days - 1)->startOfDay();
+        $sensitiveEvents = [
+            'deal.status_changed',
+            'document.uploaded',
+            'document.downloaded',
+            'user.login',
+            'user.logout',
+            'staff.invited',
+            'deal.cancelled',
+        ];
+
+        $rows = ActivityLog::query()
+            ->where('created_at', '>=', $start)
+            ->select(
+                DB::raw('DATE(created_at) as date'),
+                DB::raw('COUNT(*) as total'),
+                DB::raw("SUM(CASE WHEN event IN ('" . implode("','", $sensitiveEvents) . "') THEN 1 ELSE 0 END) as sensitive"),
+            )
+            ->groupBy('date')
+            ->orderBy('date')
+            ->get()
+            ->keyBy('date');
+
+        $points = [];
+        for ($i = $days - 1; $i >= 0; $i--) {
+            $date = now()->subDays($i)->toDateString();
+            $row = $rows->get($date);
+            $points[] = [
+                'date'      => $date,
+                'total'     => $row ? (int) $row->total : 0,
+                'sensitive' => $row ? (int) $row->sensitive : 0,
+            ];
+        }
+
+        return $points;
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────
 
     /**
@@ -386,5 +560,15 @@ class ReportingService
         }
 
         return round((($current - $previous) / $previous) * 100, 1);
+    }
+
+    /**
+     * Returns SQL expression for grouping timestamps by year-month per DB driver.
+     */
+    private function monthBucketExpression(): string
+    {
+        return DB::getDriverName() === 'sqlite'
+            ? "strftime('%Y-%m', created_at)"
+            : "DATE_FORMAT(created_at, '%Y-%m')";
     }
 }

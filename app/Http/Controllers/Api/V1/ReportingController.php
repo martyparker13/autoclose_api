@@ -143,4 +143,58 @@ class ReportingController extends BaseController
 
         return response()->json(['data' => $data]);
     }
+
+    /**
+     * GET /admin/reports/summary?period=30d
+     *
+     * Platform-wide KPI summary for super admins.
+     */
+    public function adminSummary(Request $request): JsonResponse
+    {
+        $request->validate(['period' => ['nullable', 'in:7d,30d,90d,1y']]);
+
+        $data = $this->reporting->summaryGlobal($request->input('period', '30d'));
+
+        return response()->json(['data' => $data]);
+    }
+
+    /**
+     * GET /admin/reports/trend
+     *
+     * Platform-wide monthly trend for trailing 12 months.
+     */
+    public function adminTrend(Request $request): JsonResponse
+    {
+        $data = $this->reporting->monthlyTrendGlobal();
+
+        return response()->json(['data' => $data]);
+    }
+
+    /**
+     * GET /admin/reports/top-dealers?limit=10
+     *
+     * Top dealers by closed deals and revenue.
+     */
+    public function adminTopDealers(Request $request): JsonResponse
+    {
+        $request->validate(['limit' => ['nullable', 'integer', 'min:1', 'max:50']]);
+
+        $data = $this->reporting->topDealers((int) $request->input('limit', 10));
+
+        return response()->json(['data' => $data]);
+    }
+
+    /**
+     * GET /admin/reports/audit-activity?days=14
+     *
+     * Daily audit activity counts for super admins.
+     */
+    public function adminAuditActivity(Request $request): JsonResponse
+    {
+        $request->validate(['days' => ['nullable', 'integer', 'min:7', 'max:60']]);
+
+        $data = $this->reporting->auditActivity((int) $request->input('days', 14));
+
+        return response()->json(['data' => $data]);
+    }
 }

@@ -8,6 +8,7 @@ use App\Http\Requests\Vehicle\ImportVehiclesRequest;
 use App\Http\Requests\Vehicle\StoreVehicleRequest;
 use App\Http\Requests\Vehicle\UpdateVehicleRequest;
 use App\Http\Resources\VehicleResource;
+use App\Models\ActivityLog;
 use App\Models\DealerSyncRun;
 use App\Models\Vehicle;
 use App\Repositories\VehicleRepositoryInterface;
@@ -88,6 +89,8 @@ class VehicleController extends BaseController
         $dealer  = app('current_dealer');
         $vehicle = $this->inventory->create($dealer, $request->validated());
 
+        ActivityLog::record('vehicle.created', $vehicle, [], $vehicle->only(['vin', 'year', 'make', 'model', 'price']));
+
         return $this->resourceResponse(new VehicleResource($vehicle), 201);
     }
 
@@ -98,7 +101,10 @@ class VehicleController extends BaseController
     {
         $dealer  = app('current_dealer');
         $model   = $this->repo->findForDealer($vehicle, $dealer->id);
+        $old     = $model->only(['vin', 'year', 'make', 'model', 'price', 'status']);
         $updated = $this->inventory->update($model, $dealer, $request->validated());
+
+        ActivityLog::record('vehicle.updated', $updated, $old, $updated->only(array_keys($old)));
 
         return $this->resourceResponse(new VehicleResource($updated));
     }
@@ -111,6 +117,8 @@ class VehicleController extends BaseController
         $dealer = app('current_dealer');
         $model  = $this->repo->findForDealer($vehicle, $dealer->id);
         $this->inventory->delete($model, $dealer);
+
+        ActivityLog::record('vehicle.deleted', $model, $model->only(['vin', 'year', 'make', 'model']), []);
 
         return $this->noContent();
     }

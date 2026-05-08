@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Resources\DealDocumentResource;
+use App\Models\ActivityLog;
 use App\Models\Deal;
 use App\Models\DealDocument;
 use Illuminate\Http\JsonResponse;
@@ -60,6 +61,8 @@ class DealDocumentController extends BaseController
             'uploaded_by' => $user->id,
         ]);
 
+        ActivityLog::record('document.uploaded', $doc, [], ['deal_id' => $dealModel->id, 'type' => $doc->type]);
+
         return $this->resourceResponse(new DealDocumentResource($doc), 201);
     }
 
@@ -81,6 +84,8 @@ class DealDocumentController extends BaseController
         /** @var \Illuminate\Filesystem\FilesystemAdapter $s3 */
         $s3  = Storage::disk('s3');
         $url = $s3->temporaryUrl($doc->s3_path, now()->addMinutes(15));
+
+        ActivityLog::record('document.downloaded', $doc, [], ['deal_id' => $dealModel->id, 'type' => $doc->type]);
 
         return response()->json(['data' => ['url' => $url, 'expires_in' => 900]]);
     }

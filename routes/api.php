@@ -24,6 +24,7 @@ use App\Http\Controllers\Api\V1\TradeInAppraisalController;
 use App\Http\Controllers\Api\V1\LenderRatesController;
 use App\Http\Controllers\Api\V1\PreQualController;
 use App\Http\Controllers\Api\V1\ReportingController;
+use App\Http\Controllers\Api\V1\ActivityLogController;
 use App\Http\Controllers\Api\V1\VehicleController;
 use App\Http\Controllers\Api\V1\VehicleFeatureController;
 use App\Http\Controllers\Api\V1\VehicleMediaController;
@@ -179,6 +180,11 @@ Route::middleware('auth:sanctum')->group(function () {
                 Route::get('credit-approval',[ReportingController::class, 'creditApproval']);
             });
 
+            // Audit log — dealer admin view
+            Route::middleware('role:dealer_admin')->group(function () {
+                Route::get('dealer/audit-log', [ActivityLogController::class, 'index']);
+            });
+
             // Lender rate feed
             Route::get('dealer/lender-rates',       [LenderRatesController::class, 'index']);
             Route::get('dealer/lender-rate-bands',  [LenderRatesController::class, 'bands']);
@@ -255,6 +261,13 @@ Route::middleware('tenant')->group(function () {
 
 // ── Super-admin — global dealer management (no tenant context) ────────────
 Route::middleware(['auth:sanctum', 'role:super_admin'])->prefix('admin')->group(function () {
+    Route::get('audit-log',                       [ActivityLogController::class, 'adminIndex']);
+    Route::prefix('reports')->group(function () {
+        Route::get('summary',                     [ReportingController::class, 'adminSummary']);
+        Route::get('trend',                       [ReportingController::class, 'adminTrend']);
+        Route::get('top-dealers',                 [ReportingController::class, 'adminTopDealers']);
+        Route::get('audit-activity',              [ReportingController::class, 'adminAuditActivity']);
+    });
     Route::get('dealers',                        [AdminDealerController::class, 'index']);
     Route::post('dealers',                       [AdminDealerController::class, 'store']);
     Route::get('dealers/{dealer}',               [AdminDealerController::class, 'show']);

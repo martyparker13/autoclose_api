@@ -8,6 +8,7 @@ use App\Http\Requests\Auth\LoginRequest;
 use App\Http\Requests\Auth\RegisterRequest;
 use App\Http\Requests\Auth\ResetPasswordRequest;
 use App\Http\Resources\UserResource;
+use App\Models\ActivityLog;
 use App\Services\AuthService;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Http\JsonResponse;
@@ -44,6 +45,8 @@ class AuthController extends BaseController
 
         $user = $result['user']->load('dealer');
 
+        ActivityLog::record('user.login', $user);
+
         return response()->json([
             'data'  => new UserResource($user),
             'token' => $result['token'],
@@ -55,7 +58,9 @@ class AuthController extends BaseController
      */
     public function logout(Request $request): JsonResponse
     {
-        $this->authService->logout($request->user());
+        $user = $request->user();
+        ActivityLog::record('user.logout', $user);
+        $this->authService->logout($user);
 
         return $this->noContent();
     }
@@ -121,6 +126,8 @@ class AuthController extends BaseController
     {
         $dealer = app('current_dealer');
         $user   = $this->authService->inviteStaff($request->validated(), $dealer->id);
+
+        ActivityLog::record('staff.invited', $user, [], ['email' => $user->email, 'role' => $user->role]);
 
         return response()->json(['data' => new UserResource($user)], 201);
     }
