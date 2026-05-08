@@ -140,10 +140,11 @@ class DealerController extends BaseController
         $dealer = app('current_dealer');
 
         $data = $request->validate([
-            'name'          => ['sometimes', 'string', 'max:255'],
-            'slug'          => ['sometimes', 'string', 'max:63', 'regex:/^[a-z0-9-]+$/'],
-            'primary_color' => ['nullable', 'string', 'regex:/^#[0-9a-fA-F]{6}$/'],
-            'logo_url'      => ['nullable', 'url', 'max:2048'],
+            'name'              => ['sometimes', 'string', 'max:255'],
+            'slug'              => ['sometimes', 'string', 'max:63', 'regex:/^[a-z0-9-]+$/'],
+            'primary_color'     => ['nullable', 'string', 'regex:/^#[0-9a-fA-F]{6}$/'],
+            'logo_url'          => ['nullable', 'url', 'max:2048'],
+            'google_review_url' => ['nullable', 'url', 'max:2048'],
         ]);
 
         $dealer->update($data);

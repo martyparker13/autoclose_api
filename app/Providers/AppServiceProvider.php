@@ -4,6 +4,7 @@ namespace App\Providers;
 
 use App\Events\DealStatusChanged;
 use App\Listeners\SendDealStatusNotification;
+use App\Listeners\TriggerPostPurchaseJourney;
 use App\Models\Deal;
 use App\Models\User;
 use App\Models\Vehicle;
@@ -39,5 +40,6 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(User::class, UserPolicy::class);
 
         Event::listen(DealStatusChanged::class, SendDealStatusNotification::class);
+        Event::listen(DealStatusChanged::class, TriggerPostPurchaseJourney::class);
     }
 }

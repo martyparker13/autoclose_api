@@ -34,6 +34,7 @@ class Dealer extends Model
         'stripe_subscription_id',
         'is_active',
         'feature_flags',
+        'google_review_url',
     ];
 
     /** @var list<string> */
