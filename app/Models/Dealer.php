@@ -37,6 +37,7 @@ class Dealer extends Model
         'google_review_url',
         'dealertrack_credentials',
         'routeone_credentials',
+        'desking_config',
     ];
 
     /** @var list<string> */
@@ -53,6 +54,7 @@ class Dealer extends Model
         'dealertrack_credentials'  => 'encrypted:array',
         'routeone_credentials'     => 'encrypted:array',
         'feature_flags'            => 'array',
+        'desking_config'           => 'array',
         'is_active'                => 'boolean',
     ];
 

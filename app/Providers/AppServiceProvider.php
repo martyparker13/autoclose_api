@@ -11,6 +11,7 @@ use App\Services\Integrations\CreditDecisionService;
 use App\Services\Integrations\DealerTrackService;
 use App\Services\Integrations\EContractService;
 use App\Services\Integrations\RouteOneService;
+use App\Services\DeskingService;
 use App\Models\Deal;
 use App\Models\User;
 use App\Models\Vehicle;
@@ -38,6 +39,7 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(RouteOneService::class);
         $this->app->singleton(CreditDecisionService::class);
         $this->app->singleton(EContractService::class);
+        $this->app->singleton(DeskingService::class);
     }
 
     /**

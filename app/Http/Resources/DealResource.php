@@ -30,6 +30,7 @@ class DealResource extends JsonResource
             'buyer'            => new UserResource($this->whenLoaded('buyer')),
             'salesperson'      => new UserResource($this->whenLoaded('salesperson')),
             'fi_products'      => DealFiProductResource::collection($this->whenLoaded('dealFiProducts')),
+            'scenarios'        => DealScenarioResource::collection($this->whenLoaded('scenarios')),
             'credit_application'    => new CreditApplicationResource($this->whenLoaded('creditApplication')),
             'trade_in_appraisal'    => new TradeInAppraisalResource($this->whenLoaded('tradeInAppraisal')),
             'documents'             => DealDocumentResource::collection($this->whenLoaded('documents')),

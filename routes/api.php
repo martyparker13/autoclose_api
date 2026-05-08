@@ -7,6 +7,8 @@ use App\Http\Controllers\Api\V1\CreditApplicationController;
 use App\Http\Controllers\Api\V1\DealController;
 use App\Http\Controllers\Api\V1\DealDocumentController;
 use App\Http\Controllers\Api\V1\DealerApiKeyController;
+use App\Http\Controllers\Api\V1\DealScenarioController;
+use App\Http\Controllers\Api\V1\DeskingCalculatorController;
 use App\Http\Controllers\Api\V1\DeliveryAppointmentController;
 use App\Http\Controllers\Api\V1\DepositController;
 use App\Http\Controllers\Api\V1\DocuSignController;
@@ -38,6 +40,10 @@ Route::prefix('auth')->group(function () {
 // ── Public inventory browsing (no auth required, no tenant required) ──────
 Route::get('vehicles',           [VehicleController::class, 'index']);
 Route::get('vehicles/{vehicle}', [VehicleController::class, 'show']);
+
+// ── Public desking calculator (no auth required) ──────────────────────────
+Route::get('vehicles/{vehicle}/desking-config', [DeskingCalculatorController::class, 'config']);
+Route::post('vehicles/{vehicle}/pencil',        [DeskingCalculatorController::class, 'pencil']);
 
 // ── Authenticated routes ──────────────────────────────────────────────────
 Route::middleware('auth:sanctum')->group(function () {
@@ -90,6 +96,10 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::middleware('role:buyer')->group(function () {
             Route::post('deals',             [DealController::class, 'store']);
             Route::patch('deals/{deal}',     [DealController::class, 'update']);
+
+            // Desking — buyer can view and select their own scenarios
+            Route::get('deals/{deal}/scenarios',                              [DealScenarioController::class, 'index']);
+            Route::post('deals/{deal}/scenarios/{scenario}/select',           [DealScenarioController::class, 'select']);
         });
 
         // Dealer admin/staff — manage all deals in their store
@@ -113,6 +123,12 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::put('dealer/deals/{deal}/fi-products',            [DealController::class, 'syncFiProducts']);
             Route::post('dealer/deals/{deal}/econtract',             [DealController::class, 'pushEContract']);
             Route::delete('dealer/deals/{deal}',                     [DealController::class, 'destroy']);
+
+            // Desking / payment scenarios — dealer F&I manager
+            Route::get('dealer/deals/{deal}/scenarios',                            [DealScenarioController::class, 'index']);
+            Route::post('dealer/deals/{deal}/scenarios/generate',                  [DealScenarioController::class, 'generate']);
+            Route::put('dealer/deals/{deal}/scenarios/{scenario}',                 [DealScenarioController::class, 'update']);
+            Route::post('dealer/deals/{deal}/scenarios/{scenario}/select',         [DealScenarioController::class, 'select']);
 
             // Trade-in — dealer responds with offer
             Route::patch('dealer/deals/{deal}/trade-in/{appraisal}', [TradeInAppraisalController::class, 'respond']);

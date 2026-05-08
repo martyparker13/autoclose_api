@@ -21,6 +21,7 @@ class DealRepository implements DealRepositoryInterface
         'tradeInAppraisal',
         'documents',
         'deliveryAppointment',
+        'scenarios',
     ];
 
     /**

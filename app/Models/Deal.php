@@ -121,4 +121,10 @@ class Deal extends Model
     {
         return $this->hasOne(DeliveryAppointment::class);
     }
+
+    /** @return HasMany<DealScenario> */
+    public function scenarios(): HasMany
+    {
+        return $this->hasMany(DealScenario::class)->orderBy('label');
+    }
 }
