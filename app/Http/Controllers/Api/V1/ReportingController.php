@@ -197,4 +197,18 @@ class ReportingController extends BaseController
 
         return response()->json(['data' => $data]);
     }
+
+    /**
+     * GET /admin/reports/workflow-automation?days=14
+     *
+     * Workflow automation health and volume for super admins.
+     */
+    public function adminWorkflowAutomation(Request $request): JsonResponse
+    {
+        $request->validate(['days' => ['nullable', 'integer', 'min:7', 'max:60']]);
+
+        $data = $this->reporting->workflowAutomationOverview((int) $request->input('days', 14));
+
+        return response()->json(['data' => $data]);
+    }
 }

@@ -267,6 +267,7 @@ Route::middleware(['auth:sanctum', 'role:super_admin'])->prefix('admin')->group(
         Route::get('trend',                       [ReportingController::class, 'adminTrend']);
         Route::get('top-dealers',                 [ReportingController::class, 'adminTopDealers']);
         Route::get('audit-activity',              [ReportingController::class, 'adminAuditActivity']);
+        Route::get('workflow-automation',         [ReportingController::class, 'adminWorkflowAutomation']);
     });
     Route::get('dealers',                        [AdminDealerController::class, 'index']);
     Route::post('dealers',                       [AdminDealerController::class, 'store']);

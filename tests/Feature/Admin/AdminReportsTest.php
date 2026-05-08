@@ -134,6 +134,45 @@ class AdminReportsTest extends TestCase
             'created_at' => now()->subDays(2),
         ]);
 
+        ActivityLog::create([
+            'dealer_id'  => $dealerA->id,
+            'user_id'    => $this->superAdmin->id,
+            'event'      => 'workflow.reminder.resume_deal',
+            'model_type' => Deal::class,
+            'model_id'   => 101,
+            'old_values' => null,
+            'new_values' => ['audience' => 'buyer'],
+            'ip_address' => '127.0.0.1',
+            'user_agent' => 'PHPUnit',
+            'created_at' => now()->subDays(1),
+        ]);
+
+        ActivityLog::create([
+            'dealer_id'  => $dealerB->id,
+            'user_id'    => $this->superAdmin->id,
+            'event'      => 'workflow.escalation.docs_pending',
+            'model_type' => Deal::class,
+            'model_id'   => 102,
+            'old_values' => null,
+            'new_values' => ['audience' => 'dealer_team'],
+            'ip_address' => '127.0.0.1',
+            'user_agent' => 'PHPUnit',
+            'created_at' => now()->subDays(1),
+        ]);
+
+        ActivityLog::create([
+            'dealer_id'  => $dealerB->id,
+            'user_id'    => $this->superAdmin->id,
+            'event'      => 'workflow.next_step.docs_prepare',
+            'model_type' => Deal::class,
+            'model_id'   => 102,
+            'old_values' => null,
+            'new_values' => ['audience' => 'dealer_team'],
+            'ip_address' => '127.0.0.1',
+            'user_agent' => 'PHPUnit',
+            'created_at' => now()->subHours(6),
+        ]);
+
         $this->actingAs($this->superAdmin)
             ->getJson('/api/v1/admin/reports/trend')
             ->assertOk()
@@ -151,6 +190,27 @@ class AdminReportsTest extends TestCase
             ->assertOk()
             ->assertJsonCount(14, 'data')
             ->assertJsonStructure(['data' => [['date', 'total', 'sensitive']]]);
+
+        $this->actingAs($this->superAdmin)
+            ->getJson('/api/v1/admin/reports/workflow-automation?days=14')
+            ->assertOk()
+            ->assertJsonStructure([
+                'data' => [
+                    'period_days',
+                    'total_events',
+                    'reminders',
+                    'escalations',
+                    'next_steps',
+                    'unique_deals_touched',
+                    'top_events' => [['event', 'total']],
+                    'daily' => [['date', 'total']],
+                ],
+            ])
+            ->assertJsonPath('data.total_events', 3)
+            ->assertJsonPath('data.reminders', 1)
+            ->assertJsonPath('data.escalations', 1)
+            ->assertJsonPath('data.next_steps', 1)
+            ->assertJsonPath('data.unique_deals_touched', 2);
     }
 
     public function test_non_super_admin_cannot_access_admin_reports(): void
