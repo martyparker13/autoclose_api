@@ -58,4 +58,12 @@ return [
         'from'  => env('TWILIO_FROM'),
     ],
 
+    'dealertrack' => [
+        'webhook_secret' => env('DEALERTRACK_WEBHOOK_SECRET'),
+    ],
+
+    'routeone' => [
+        'webhook_secret' => env('ROUTEONE_WEBHOOK_SECRET'),
+    ],
+
 ];

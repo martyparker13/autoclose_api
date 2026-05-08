@@ -11,6 +11,8 @@ use App\Http\Controllers\Api\V1\DeliveryAppointmentController;
 use App\Http\Controllers\Api\V1\DepositController;
 use App\Http\Controllers\Api\V1\DocuSignController;
 use App\Http\Controllers\Api\V1\DocuSignWebhookController;
+use App\Http\Controllers\Webhooks\DealerTrackWebhookController;
+use App\Http\Controllers\Webhooks\RouteOneWebhookController;
 use App\Http\Controllers\Api\V1\FiProductController;
 use App\Http\Controllers\Api\V1\TradeInAppraisalController;
 use App\Http\Controllers\Api\V1\ReportingController;
@@ -182,6 +184,10 @@ Route::middleware('tenant')->group(function () {
     Route::post('webhooks/stripe',   [DepositController::class, 'webhook']);
     Route::post('webhooks/docusign', [DocuSignWebhookController::class, 'handle']);
 });
+
+// ── DealerTrack + RouteOne webhooks (public, no tenant, signature-verified) ─
+Route::post('webhooks/dealertrack', [DealerTrackWebhookController::class, 'handle']);
+Route::post('webhooks/routeone',    [RouteOneWebhookController::class,    'handle']);
 
 // ── Public inventory browsing (unauthenticated buyers) ────────────────────
 Route::middleware('tenant')->group(function () {
