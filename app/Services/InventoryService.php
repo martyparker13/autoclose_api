@@ -12,6 +12,21 @@ use Illuminate\Support\Facades\Storage;
 
 class InventoryService
 {
+    /** @var list<string> */
+    private const SYNC_ALLOWED_FIELDS = [
+        'stock_number', 'year', 'make', 'model', 'trim', 'body_style',
+        'exterior_color', 'interior_color', 'mileage', 'condition',
+        'price', 'msrp', 'internet_price', 'transmission', 'engine',
+        'drivetrain', 'fuel_type', 'doors', 'cylinders', 'status',
+        'description', 'carfax_url',
+    ];
+
+    /** @var list<string> */
+    private const SYNC_VALID_CONDITIONS = ['new', 'used', 'certified'];
+
+    /** @var list<string> */
+    private const SYNC_VALID_STATUSES = ['available', 'pending', 'sold', 'hold'];
+
     public function __construct(
         private readonly VehicleRepositoryInterface $vehicles,
     ) {}
@@ -232,5 +247,135 @@ class InventoryService
         fclose($handle);
 
         return compact('created', 'updated', 'skipped', 'errors');
+    }
+
+    /**
+     * Sync one JSON chunk from a DMS feed.
+     *
+     * @param list<array<string,mixed>> $payload
+     * @return array{ created: int, updated: int, skipped: int, errors: list<string>, incoming_vins: list<string>, incoming_stocks: list<string> }
+     */
+    public function syncFromPayload(Dealer $dealer, array $payload): array
+    {
+        $created = 0;
+        $updated = 0;
+        $skipped = 0;
+        $errors = [];
+        $seen = [];
+        $incomingVins = [];
+        $incomingStocks = [];
+
+        foreach ($payload as $index => $item) {
+            if (! is_array($item)) {
+                $errors[] = "Item {$index}: not an object.";
+                $skipped++;
+                continue;
+            }
+
+            $vin = isset($item['vin']) ? strtoupper(trim((string) $item['vin'])) : null;
+            $stockNumber = isset($item['stock_number']) ? trim((string) $item['stock_number']) : null;
+
+            if (! $vin && ! $stockNumber) {
+                $errors[] = "Item {$index}: vin or stock_number is required.";
+                $skipped++;
+                continue;
+            }
+
+            if ($vin && strlen($vin) !== 17) {
+                $errors[] = "Item {$index}: VIN must be exactly 17 characters (got \"{$vin}\").";
+                $skipped++;
+                continue;
+            }
+
+            $dedupeKey = $vin ?? $stockNumber;
+            if (isset($seen[$dedupeKey])) {
+                $errors[] = "Item {$index}: duplicate VIN/stock \"{$dedupeKey}\" in payload.";
+                $skipped++;
+                continue;
+            }
+            $seen[$dedupeKey] = true;
+
+            $condition = $item['condition'] ?? 'used';
+            if (! in_array($condition, self::SYNC_VALID_CONDITIONS, true)) {
+                $condition = 'used';
+            }
+
+            $status = $item['status'] ?? 'available';
+            if (! in_array($status, self::SYNC_VALID_STATUSES, true)) {
+                $status = 'available';
+            }
+
+            $attributes = ['dealer_id' => $dealer->id];
+            if ($vin) {
+                $attributes['vin'] = $vin;
+                $incomingVins[] = $vin;
+            }
+            if ($stockNumber) {
+                $attributes['stock_number'] = $stockNumber;
+                $incomingStocks[] = $stockNumber;
+            }
+
+            $values = ['condition' => $condition, 'status' => $status];
+            foreach (self::SYNC_ALLOWED_FIELDS as $field) {
+                if ($field === 'condition' || $field === 'status') {
+                    continue;
+                }
+                if (! array_key_exists($field, $item)) {
+                    continue;
+                }
+
+                if (in_array($field, ['price', 'msrp', 'internet_price'], true)) {
+                    $values[$field] = (int) round((float) $item[$field] * 100);
+                } else {
+                    $values[$field] = $item[$field];
+                }
+            }
+
+            $matchColumn = $vin ? 'vin' : 'stock_number';
+            $existing = Vehicle::where('dealer_id', $dealer->id)
+                ->where($matchColumn, $attributes[$matchColumn])
+                ->withTrashed()
+                ->first();
+
+            if ($existing) {
+                $existing->restore();
+                $existing->fill($values)->save();
+                $updated++;
+            } else {
+                Vehicle::create(array_merge($attributes, $values));
+                $created++;
+            }
+        }
+
+        return [
+            'created' => $created,
+            'updated' => $updated,
+            'skipped' => $skipped,
+            'errors' => $errors,
+            'incoming_vins' => array_values(array_unique($incomingVins)),
+            'incoming_stocks' => array_values(array_unique($incomingStocks)),
+        ];
+    }
+
+    /**
+     * Archive (set hold) vehicles that are not present in the latest feed snapshot.
+     *
+     * @param list<string> $incomingVins
+     * @param list<string> $incomingStocks
+     */
+    public function archiveMissingFromSync(Dealer $dealer, array $incomingVins, array $incomingStocks): int
+    {
+        $query = Vehicle::where('dealer_id', $dealer->id)
+            ->where('status', 'available');
+
+        if (! empty($incomingVins)) {
+            $query->whereNotIn('vin', $incomingVins);
+        }
+
+        if (! empty($incomingStocks)) {
+            $query->whereNotIn('stock_number', $incomingStocks);
+        }
+
+        return $query->update(['status' => 'hold']);
     }
 }
