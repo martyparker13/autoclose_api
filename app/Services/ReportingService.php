@@ -493,6 +493,7 @@ class ReportingService
     public function auditActivity(int $days = 14): array
     {
         $start = now()->subDays($days - 1)->startOfDay();
+        $dateExpr = $this->dateBucketExpression();
         $sensitiveEvents = [
             'deal.status_changed',
             'document.uploaded',
@@ -506,7 +507,7 @@ class ReportingService
         $rows = ActivityLog::query()
             ->where('created_at', '>=', $start)
             ->select(
-                DB::raw('DATE(created_at) as date'),
+                DB::raw("{$dateExpr} as date"),
                 DB::raw('COUNT(*) as total'),
                 DB::raw("SUM(CASE WHEN event IN ('" . implode("','", $sensitiveEvents) . "') THEN 1 ELSE 0 END) as sensitive"),
             )
@@ -546,6 +547,7 @@ class ReportingService
     public function workflowAutomationOverviewForDealer(Dealer $dealer, int $days = 14): array
     {
         $start = now()->subDays($days - 1)->startOfDay();
+        $dateExpr = $this->dateBucketExpression();
 
         $base = ActivityLog::query()
             ->where('dealer_id', $dealer->id)
@@ -577,7 +579,7 @@ class ReportingService
 
         $dailyRows = (clone $base)
             ->select(
-                DB::raw('DATE(created_at) as date'),
+                DB::raw("{$dateExpr} as date"),
                 DB::raw('COUNT(*) as total'),
             )
             ->groupBy('date')
@@ -624,6 +626,7 @@ class ReportingService
     public function workflowAutomationOverview(int $days = 14): array
     {
         $start = now()->subDays($days - 1)->startOfDay();
+        $dateExpr = $this->dateBucketExpression();
 
         $base = ActivityLog::query()
             ->where('created_at', '>=', $start)
@@ -654,7 +657,7 @@ class ReportingService
 
         $dailyRows = (clone $base)
             ->select(
-                DB::raw('DATE(created_at) as date'),
+                DB::raw("{$dateExpr} as date"),
                 DB::raw('COUNT(*) as total'),
             )
             ->groupBy('date')
@@ -727,6 +730,17 @@ class ReportingService
             'pgsql' => "to_char(created_at, 'YYYY-MM')",
             'sqlsrv' => "FORMAT(created_at, 'yyyy-MM')",
             default => "DATE_FORMAT(created_at, '%Y-%m')",
+        };
+    }
+
+    /**
+     * Returns SQL expression for grouping timestamps by date.
+     */
+    private function dateBucketExpression(): string
+    {
+        return match (DB::getDriverName()) {
+            'sqlsrv' => 'CAST(created_at AS date)',
+            default => 'DATE(created_at)',
         };
     }
 
