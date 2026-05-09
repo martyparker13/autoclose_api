@@ -13,3 +13,6 @@ Schedule::command('inventory:sync-dealertrack')->hourly();
 
 // Run workflow reminders/escalations for stale deals every 30 minutes.
 Schedule::command('deals:run-workflow-automation')->everyThirtyMinutes();
+
+// Check integration error rates and emit alerts every 15 minutes.
+Schedule::command('integrations:health-check')->everyFifteenMinutes();

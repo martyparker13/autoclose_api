@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Webhooks;
 use App\Http\Controllers\Api\V1\BaseController;
 use App\Services\Integrations\CreditDecisionService;
 use App\Services\Integrations\EContractService;
+use App\Services\Integrations\WebhookDeduplicationService;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -36,6 +37,7 @@ class RouteOneWebhookController extends BaseController
     public function __construct(
         private readonly CreditDecisionService $creditDecisions,
         private readonly EContractService $eContracts,
+        private readonly WebhookDeduplicationService $dedupe,
     ) {}
 
     public function handle(Request $request): JsonResponse
@@ -50,6 +52,7 @@ class RouteOneWebhookController extends BaseController
             $expected  = 'sha256='.hash_hmac('sha256', $rawPayload, $secret);
 
             if (! hash_equals($expected, $signature)) {
+                $this->dedupe->recordRejected('routeone', 'signature_invalid', $rawPayload, 'Invalid webhook signature', $request->all());
                 Log::warning('RouteOne webhook: invalid signature');
                 return $this->errorResponse('Forbidden', 403);
             }
@@ -61,6 +64,14 @@ class RouteOneWebhookController extends BaseController
         $event         = $data['event']          ?? null;
         $applicationId = $data['application_id'] ?? null;
         $decision      = $data['decision']        ?? null;
+        $eventKey = $this->eventKey($event, $applicationId, $data);
+        $dedupeResult = $this->dedupe->begin('routeone', $eventKey, $rawPayload, $data);
+
+        if ($dedupeResult['duplicate']) {
+            return response()->json(['received' => true, 'duplicate' => true]);
+        }
+
+        $webhookEvent = $dedupeResult['event'];
 
         // ── eContract signed callback ──────────────────────────────────────
         if ($event === 'contract_signed') {
@@ -68,10 +79,13 @@ class RouteOneWebhookController extends BaseController
             if ($contractId) {
                 try {
                     $this->eContracts->handleSigned('routeone', (string) $contractId);
+                    $this->dedupe->markProcessed($webhookEvent);
                 } catch (\Throwable $e) {
+                    $this->dedupe->markFailed($webhookEvent, 'eContract signed processing failed: '.$e->getMessage());
                     Log::error('RouteOne webhook: eContract signed processing failed', ['error' => $e->getMessage()]);
                 }
             } else {
+                $this->dedupe->markFailed($webhookEvent, 'contract_signed missing contract_id');
                 Log::warning('RouteOne webhook: contract_signed missing contract_id', ['payload' => $data]);
             }
             return response()->json(['received' => true]);
@@ -79,10 +93,12 @@ class RouteOneWebhookController extends BaseController
 
         // Only process decision events
         if ($event !== 'credit_decision') {
+            $this->dedupe->markProcessed($webhookEvent);
             return response()->json(['received' => true]);
         }
 
         if (! $applicationId || ! $decision) {
+            $this->dedupe->markFailed($webhookEvent, 'Missing application_id or decision');
             Log::warning('RouteOne webhook: missing application_id or decision', ['payload' => $data]);
             return $this->errorResponse('Bad Request', 400);
         }
@@ -97,15 +113,32 @@ class RouteOneWebhookController extends BaseController
                 approvedApr:    isset($data['approved_rate'])   ? (float) $data['approved_rate'] : null,
                 approvedTerm:   isset($data['approved_term'])   ? (int) $data['approved_term']   : null,
             );
+            $this->dedupe->markProcessed($webhookEvent);
         } catch (ModelNotFoundException) {
+            $this->dedupe->markProcessed($webhookEvent);
             // Return 200 — RouteOne should not retry for unknown app IDs
             Log::warning('RouteOne webhook: no credit application found for application_id', [
                 'application_id' => $applicationId,
             ]);
         } catch (\Throwable $e) {
+            $this->dedupe->markFailed($webhookEvent, 'Credit decision processing failed: '.$e->getMessage());
             Log::error('RouteOne webhook: processing failed', ['error' => $e->getMessage()]);
         }
 
         return response()->json(['received' => true]);
+    }
+
+    /** @param array<string, mixed> $data */
+    private function eventKey(?string $event, ?string $applicationId, array $data): string
+    {
+        if ($event === 'contract_signed') {
+            return $event.':'.((string) ($data['contract_id'] ?? 'unknown'));
+        }
+
+        if ($event === 'credit_decision') {
+            return $event.':'.($applicationId ?? 'unknown').':'.strtolower((string) ($data['decision'] ?? 'unknown'));
+        }
+
+        return (string) ($event ?? 'unknown').':'.($applicationId ?? 'unknown');
     }
 }
