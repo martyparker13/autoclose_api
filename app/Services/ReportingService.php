@@ -722,8 +722,11 @@ class ReportingService
      */
     private function monthBucketExpression(): string
     {
-        return DB::getDriverName() === 'sqlite'
-            ? "strftime('%Y-%m', created_at)"
-            : "DATE_FORMAT(created_at, '%Y-%m')";
+        return match (DB::getDriverName()) {
+            'sqlite' => "strftime('%Y-%m', created_at)",
+            'pgsql' => "to_char(created_at, 'YYYY-MM')",
+            'sqlsrv' => "FORMAT(created_at, 'yyyy-MM')",
+            default => "DATE_FORMAT(created_at, '%Y-%m')",
+        };
     }
 }
