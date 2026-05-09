@@ -133,6 +133,7 @@ Route::middleware('auth:sanctum')->group(function () {
                 Route::delete('dealer/settings/integrations/{platform}',        [DealerIntegrationController::class, 'disconnect']);
                 Route::post('dealer/settings/integrations/{platform}/sync',     [DealerIntegrationController::class, 'triggerSync']);
                 Route::get('dealer/settings/workflow-automation/overview',      'App\\Http\\Controllers\\Api\\V1\\WorkflowAutomationController@overview');
+                Route::get('dealer/settings/workflow-automation/runs',          'App\\Http\\Controllers\\Api\\V1\\WorkflowAutomationController@runs');
                 Route::post('dealer/settings/workflow-automation/run',           'App\\Http\\Controllers\\Api\\V1\\WorkflowAutomationController@run');
             });
 

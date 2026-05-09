@@ -42,26 +42,39 @@ class WorkflowAutomationController extends BaseController
             ])
             ->all();
 
-        $recentRuns = ActivityLog::query()
+        return response()->json([
+            'data' => array_merge($overview, [
+                'recent_events' => $recentEvents,
+            ]),
+        ]);
+    }
+
+    /**
+     * GET /dealer/settings/workflow-automation/runs?limit=10
+     */
+    public function runs(Request $request): JsonResponse
+    {
+        $request->validate(['limit' => ['nullable', 'integer', 'min:1', 'max:25']]);
+
+        $dealer = app('current_dealer');
+        $limit = (int) $request->input('limit', 10);
+
+        $runs = ActivityLog::query()
             ->where('dealer_id', $dealer->id)
             ->where('event', 'workflow.sweep.run')
             ->latest('created_at')
-            ->limit(10)
+            ->limit($limit)
             ->get(['id', 'new_values', 'created_at'])
             ->map(fn ($row) => [
                 'id' => (int) $row->id,
                 'dry_run' => (bool) (($row->new_values['dry_run'] ?? true) === true),
                 'stats' => is_array($row->new_values) ? ($row->new_values['stats'] ?? []) : [],
+                'source' => is_array($row->new_values) ? ($row->new_values['source'] ?? null) : null,
                 'executed_at' => $row->created_at?->toISOString(),
             ])
             ->all();
 
-        return response()->json([
-            'data' => array_merge($overview, [
-                'recent_events' => $recentEvents,
-                'recent_runs' => $recentRuns,
-            ]),
-        ]);
+        return response()->json(['data' => $runs]);
     }
 
     /**

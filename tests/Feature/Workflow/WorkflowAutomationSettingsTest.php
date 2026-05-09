@@ -117,13 +117,34 @@ class WorkflowAutomationSettingsTest extends TestCase
             ])
             ->assertJsonPath('data.dry_run', true)
             ->assertJsonPath('data.stats.stale_draft_reminders', 1);
+    }
 
-            $this->actingAs($admin)
-                ->getJson('/api/v1/dealer/settings/workflow-automation/overview?days=14')
-                ->assertOk()
-                ->assertJsonCount(1, 'data.recent_runs')
-                ->assertJsonPath('data.recent_runs.0.dry_run', true)
-                ->assertJsonPath('data.recent_runs.0.stats.stale_draft_reminders', 1);
+    public function test_dealer_admin_can_fetch_workflow_run_history(): void
+    {
+        $dealer = Dealer::factory()->create();
+        $admin = User::factory()->dealerAdmin()->create(['dealer_id' => $dealer->id]);
+        $buyer = User::factory()->create(['dealer_id' => $dealer->id, 'role' => 'buyer']);
+        $vehicle = Vehicle::factory()->create(['dealer_id' => $dealer->id, 'status' => 'available']);
+
+        Deal::factory()->create([
+            'dealer_id' => $dealer->id,
+            'vehicle_id' => $vehicle->id,
+            'buyer_id' => $buyer->id,
+            'status' => 'draft',
+            'updated_at' => now()->subHours(30),
+        ]);
+
+        $this->actingAs($admin)
+            ->postJson('/api/v1/dealer/settings/workflow-automation/run', ['dry_run' => true])
+            ->assertOk();
+
+        $this->actingAs($admin)
+            ->getJson('/api/v1/dealer/settings/workflow-automation/runs?limit=10')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.dry_run', true)
+            ->assertJsonPath('data.0.stats.stale_draft_reminders', 1)
+            ->assertJsonPath('data.0.source', 'dealer-settings');
     }
 
     public function test_dealer_staff_cannot_run_workflow_sweep_settings_action(): void
