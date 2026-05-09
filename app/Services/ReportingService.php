@@ -229,7 +229,7 @@ class ReportingService
             ->where('status', 'delivered')
             ->where('created_at', '>=', $start)
             ->select(
-                DB::raw('AVG(TIMESTAMPDIFF(HOUR, created_at, updated_at)) / 24 as avg_days'),
+                DB::raw($this->avgDaysToCloseExpression() . ' as avg_days'),
                 DB::raw('COUNT(*) as sample_size'),
             )
             ->first();
@@ -727,6 +727,19 @@ class ReportingService
             'pgsql' => "to_char(created_at, 'YYYY-MM')",
             'sqlsrv' => "FORMAT(created_at, 'yyyy-MM')",
             default => "DATE_FORMAT(created_at, '%Y-%m')",
+        };
+    }
+
+    /**
+     * Returns SQL expression for average days from created_at to updated_at.
+     */
+    private function avgDaysToCloseExpression(): string
+    {
+        return match (DB::getDriverName()) {
+            'sqlite' => "AVG((julianday(updated_at) - julianday(created_at)))",
+            'pgsql' => 'AVG(EXTRACT(EPOCH FROM (updated_at - created_at)) / 86400)',
+            'sqlsrv' => 'AVG(CAST(DATEDIFF(HOUR, created_at, updated_at) AS FLOAT) / 24.0)',
+            default => 'AVG(TIMESTAMPDIFF(HOUR, created_at, updated_at)) / 24',
         };
     }
 }

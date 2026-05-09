@@ -6,6 +6,7 @@ use App\Models\ActivityLog;
 use App\Models\Deal;
 use App\Models\Dealer;
 use App\Models\User;
+use App\Models\Vehicle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -94,5 +95,35 @@ class DealerWorkflowAutomationReportTest extends TestCase
         $this->actingAs($buyer)
             ->getJson('/api/v1/dealer/reports/workflow-automation?days=14')
             ->assertForbidden();
+    }
+
+    public function test_dealer_admin_can_fetch_time_to_close_report(): void
+    {
+        $dealer = Dealer::factory()->create();
+        $admin = User::factory()->dealerAdmin()->create(['dealer_id' => $dealer->id]);
+        $buyer = User::factory()->create(['dealer_id' => $dealer->id, 'role' => 'buyer']);
+        $vehicle = Vehicle::factory()->create(['dealer_id' => $dealer->id, 'status' => 'sold']);
+
+        Deal::factory()->create([
+            'dealer_id' => $dealer->id,
+            'vehicle_id' => $vehicle->id,
+            'buyer_id' => $buyer->id,
+            'status' => 'delivered',
+            'created_at' => now()->subDays(4),
+            'updated_at' => now()->subDays(1),
+        ]);
+
+        $this->actingAs($admin)
+            ->getJson('/api/v1/dealer/reports/time-to-close?period=30d')
+            ->assertOk()
+            ->assertJsonStructure([
+                'data' => [
+                    'avg_days',
+                    'sample_size',
+                    'period',
+                ],
+            ])
+            ->assertJsonPath('data.period', '30d')
+            ->assertJsonPath('data.sample_size', 1);
     }
 }
