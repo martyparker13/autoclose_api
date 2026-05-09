@@ -117,6 +117,13 @@ class WorkflowAutomationSettingsTest extends TestCase
             ])
             ->assertJsonPath('data.dry_run', true)
             ->assertJsonPath('data.stats.stale_draft_reminders', 1);
+
+            $this->actingAs($admin)
+                ->getJson('/api/v1/dealer/settings/workflow-automation/overview?days=14')
+                ->assertOk()
+                ->assertJsonCount(1, 'data.recent_runs')
+                ->assertJsonPath('data.recent_runs.0.dry_run', true)
+                ->assertJsonPath('data.recent_runs.0.stats.stale_draft_reminders', 1);
     }
 
     public function test_dealer_staff_cannot_run_workflow_sweep_settings_action(): void

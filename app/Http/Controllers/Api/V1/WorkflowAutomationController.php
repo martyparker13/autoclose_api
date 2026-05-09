@@ -42,9 +42,24 @@ class WorkflowAutomationController extends BaseController
             ])
             ->all();
 
+        $recentRuns = ActivityLog::query()
+            ->where('dealer_id', $dealer->id)
+            ->where('event', 'workflow.sweep.run')
+            ->latest('created_at')
+            ->limit(10)
+            ->get(['id', 'new_values', 'created_at'])
+            ->map(fn ($row) => [
+                'id' => (int) $row->id,
+                'dry_run' => (bool) (($row->new_values['dry_run'] ?? true) === true),
+                'stats' => is_array($row->new_values) ? ($row->new_values['stats'] ?? []) : [],
+                'executed_at' => $row->created_at?->toISOString(),
+            ])
+            ->all();
+
         return response()->json([
             'data' => array_merge($overview, [
                 'recent_events' => $recentEvents,
+                'recent_runs' => $recentRuns,
             ]),
         ]);
     }
@@ -60,6 +75,12 @@ class WorkflowAutomationController extends BaseController
         $dryRun = (bool) $request->input('dry_run', true);
 
         $stats = $this->workflow->runSweep((int) $dealer->id, $dryRun);
+
+        ActivityLog::record('workflow.sweep.run', null, [], [
+            'dry_run' => $dryRun,
+            'stats' => $stats,
+            'source' => 'dealer-settings',
+        ]);
 
         return response()->json([
             'data' => [
