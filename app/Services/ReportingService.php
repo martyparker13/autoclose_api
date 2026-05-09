@@ -135,20 +135,28 @@ class ReportingService
      */
     public function topVehicles(Dealer $dealer, int $limit = 10): array
     {
-        return Deal::forDealer($dealer->id)
+        $aggregated = Deal::forDealer($dealer->id)
             ->withoutTrashed()
             ->where('status', 'delivered')
-            ->join('vehicles', 'vehicles.id', '=', 'deals.vehicle_id')
             ->select(
                 'deals.vehicle_id',
-                'vehicles.year',
-                'vehicles.make',
-                'vehicles.model',
                 DB::raw('COUNT(*) as deals'),
                 DB::raw('SUM(deals.sale_price) as revenue_cents'),
             )
-            ->groupBy('deals.vehicle_id', 'vehicles.year', 'vehicles.make', 'vehicles.model')
-            ->orderByDesc('deals')
+            ->groupBy('deals.vehicle_id');
+
+        return DB::query()
+            ->fromSub($aggregated, 'agg')
+            ->join('vehicles', 'vehicles.id', '=', 'agg.vehicle_id')
+            ->select(
+                'agg.vehicle_id',
+                'vehicles.year',
+                'vehicles.make',
+                'vehicles.model',
+                'agg.deals',
+                'agg.revenue_cents',
+            )
+            ->orderByDesc('agg.deals')
             ->limit($limit)
             ->get()
             ->map(fn ($r) => [
@@ -169,19 +177,27 @@ class ReportingService
      */
     public function topStaff(Dealer $dealer, int $limit = 5): array
     {
-        return Deal::forDealer($dealer->id)
+        $aggregated = Deal::forDealer($dealer->id)
             ->withoutTrashed()
             ->where('status', 'delivered')
             ->whereNotNull('salesperson_id')
-            ->join('users', 'users.id', '=', 'deals.salesperson_id')
             ->select(
                 'deals.salesperson_id',
-                'users.name',
                 DB::raw('COUNT(*) as deals'),
                 DB::raw('SUM(deals.sale_price) as revenue_cents'),
             )
-            ->groupBy('deals.salesperson_id', 'users.name')
-            ->orderByDesc('deals')
+            ->groupBy('deals.salesperson_id');
+
+        return DB::query()
+            ->fromSub($aggregated, 'agg')
+            ->join('users', 'users.id', '=', 'agg.salesperson_id')
+            ->select(
+                'agg.salesperson_id',
+                'users.name',
+                'agg.deals',
+                'agg.revenue_cents',
+            )
+            ->orderByDesc('agg.deals')
             ->limit($limit)
             ->get()
             ->map(fn ($r) => [
